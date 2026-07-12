@@ -2,6 +2,7 @@ using NUnit.Framework;
 using MCPForUnity.Editor.Services;
 using MCPForUnity.Editor.Services.Server;
 using MCPForUnity.Editor.Constants;
+using MCPForUnity.Editor.Helpers;
 using UnityEditor;
 
 namespace MCPForUnityTests.Editor.Services.Server
@@ -15,6 +16,7 @@ namespace MCPForUnityTests.Editor.Services.Server
         private ServerCommandBuilder _builder;
         private bool _savedUseHttpTransport;
         private string _savedHttpUrl;
+        private StringEditorPrefSnapshot _projectHttpUrl;
 
         [SetUp]
         public void SetUp()
@@ -23,6 +25,9 @@ namespace MCPForUnityTests.Editor.Services.Server
             // Save current settings
             _savedUseHttpTransport = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
             _savedHttpUrl = EditorPrefs.GetString(EditorPrefKeys.HttpBaseUrl, string.Empty);
+            _projectHttpUrl = StringEditorPrefSnapshot.Capture(
+                HttpEndpointUtility.GetProjectScopedPrefKey(EditorPrefKeys.HttpBaseUrl));
+            EditorPrefs.DeleteKey(_projectHttpUrl.Key);
         }
 
         [TearDown]
@@ -38,6 +43,7 @@ namespace MCPForUnityTests.Editor.Services.Server
             {
                 EditorPrefs.DeleteKey(EditorPrefKeys.HttpBaseUrl);
             }
+            _projectHttpUrl.Restore();
             // Refresh cache to reflect restored values
             EditorConfigurationCache.Instance.Refresh();
         }

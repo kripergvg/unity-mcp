@@ -24,6 +24,7 @@ namespace MCPForUnity.Editor.Constants
         internal const string ClaudeCliPathOverride = "MCPForUnity.ClaudeCliPath";
         internal const string ClientProjectDirOverride = "MCPForUnity.ClientProjectDir";
 
+        // Endpoint helpers suffix these legacy keys with the project hash for project-specific overrides.
         internal const string HttpBaseUrl = "MCPForUnity.HttpUrl";
         internal const string HttpRemoteBaseUrl = "MCPForUnity.HttpRemoteUrl";
         internal const string SessionId = "MCPForUnity.SessionId";

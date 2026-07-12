@@ -62,6 +62,9 @@ namespace MCPForUnityTests.Editor.Helpers
         private bool _hadDevForceRefresh;
         private bool _originalDevForceRefresh;
         private IPlatformService _originalPlatformService;
+        private StringEditorPrefSnapshot _projectHttpUrl;
+        private StringEditorPrefSnapshot _projectHttpRemoteUrl;
+        private StringEditorPrefSnapshot _httpTransportScope;
 
         [OneTimeSetUp]
         public void OneTimeSetUp()
@@ -73,6 +76,11 @@ namespace MCPForUnityTests.Editor.Helpers
             _hadDevForceRefresh = EditorPrefs.HasKey(EditorPrefKeys.DevModeForceServerRefresh);
             _originalDevForceRefresh = EditorPrefs.GetBool(EditorPrefKeys.DevModeForceServerRefresh, false);
             _originalPlatformService = MCPServiceLocator.Platform;
+            _projectHttpUrl = StringEditorPrefSnapshot.Capture(
+                HttpEndpointUtility.GetProjectScopedPrefKey(EditorPrefKeys.HttpBaseUrl));
+            _projectHttpRemoteUrl = StringEditorPrefSnapshot.Capture(
+                HttpEndpointUtility.GetProjectScopedPrefKey(EditorPrefKeys.HttpRemoteBaseUrl));
+            _httpTransportScope = StringEditorPrefSnapshot.Capture(EditorPrefKeys.HttpTransportScope);
         }
 
         [SetUp]
@@ -82,6 +90,9 @@ namespace MCPForUnityTests.Editor.Helpers
             EditorPrefs.DeleteKey(EditorPrefKeys.GitUrlOverride);
             // Default to stdio mode for existing tests unless specified otherwise
             EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, false);
+            EditorPrefs.SetString(EditorPrefKeys.HttpTransportScope, "local");
+            HttpEndpointUtility.SaveLocalBaseUrl("http://127.0.0.1:8080");
+            HttpEndpointUtility.SaveRemoteBaseUrl("https://remote.example");
             // Ensure deterministic uvx args ordering for these tests regardless of editor settings
             // (dev-mode inserts --no-cache/--refresh, which changes the first args).
             EditorPrefs.SetBool(EditorPrefKeys.DevModeForceServerRefresh, false);
@@ -138,6 +149,10 @@ namespace MCPForUnityTests.Editor.Helpers
                 EditorPrefs.DeleteKey(EditorPrefKeys.DevModeForceServerRefresh);
             }
 
+            _projectHttpUrl.Restore();
+            _projectHttpRemoteUrl.Restore();
+            _httpTransportScope.Restore();
+            EditorConfigurationCache.Instance.Refresh();
         }
 
         [Test]

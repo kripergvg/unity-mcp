@@ -27,6 +27,9 @@ namespace MCPForUnityTests.Editor.Helpers
         private bool _originalHttpTransport;
         private bool _hadHttpUrl;
         private string _originalHttpUrl;
+        private StringEditorPrefSnapshot _projectHttpUrl;
+        private StringEditorPrefSnapshot _projectHttpRemoteUrl;
+        private StringEditorPrefSnapshot _httpTransportScope;
 
         [SetUp]
         public void SetUp()
@@ -36,6 +39,13 @@ namespace MCPForUnityTests.Editor.Helpers
             _originalHttpTransport = EditorPrefs.GetBool(UseHttpTransportPrefKey, true);
             _hadHttpUrl = EditorPrefs.HasKey(HttpUrlPrefKey);
             _originalHttpUrl = EditorPrefs.GetString(HttpUrlPrefKey, "");
+            _projectHttpUrl = StringEditorPrefSnapshot.Capture(
+                HttpEndpointUtility.GetProjectScopedPrefKey(HttpUrlPrefKey));
+            _projectHttpRemoteUrl = StringEditorPrefSnapshot.Capture(
+                HttpEndpointUtility.GetProjectScopedPrefKey(EditorPrefKeys.HttpRemoteBaseUrl));
+            _httpTransportScope = StringEditorPrefSnapshot.Capture(EditorPrefKeys.HttpTransportScope);
+            EditorPrefs.DeleteKey(_projectHttpUrl.Key);
+            EditorPrefs.DeleteKey(_projectHttpRemoteUrl.Key);
 
             // Tests are designed for Linux/macOS runners. Skip on Windows due to ProcessStartInfo
             // restrictions when UseShellExecute=false for .cmd/.bat scripts.
@@ -65,6 +75,7 @@ namespace MCPForUnityTests.Editor.Helpers
             EditorPrefs.SetBool(EditorPrefKeys.AutoRegisterEnabled, false);
             // Force HTTP transport defaults so expectations match current behavior
             EditorPrefs.SetBool(UseHttpTransportPrefKey, true);
+            EditorPrefs.SetString(EditorPrefKeys.HttpTransportScope, "local");
             EditorPrefs.SetString(HttpUrlPrefKey, "http://localhost:8080");
             EditorConfigCache.Instance.Refresh();
         }
@@ -87,6 +98,11 @@ namespace MCPForUnityTests.Editor.Helpers
                 EditorPrefs.SetString(HttpUrlPrefKey, _originalHttpUrl);
             else
                 EditorPrefs.DeleteKey(HttpUrlPrefKey);
+
+            _projectHttpUrl.Restore();
+            _projectHttpRemoteUrl.Restore();
+            _httpTransportScope.Restore();
+            EditorConfigCache.Instance.Refresh();
 
             // Remove temp files
             try { if (Directory.Exists(_tempRoot)) Directory.Delete(_tempRoot, true); } catch { }

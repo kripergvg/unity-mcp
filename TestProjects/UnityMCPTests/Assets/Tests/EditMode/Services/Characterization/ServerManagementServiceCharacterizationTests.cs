@@ -29,6 +29,8 @@ namespace MCPForUnityTests.Editor.Services.Characterization
         private bool _savedAllowLanHttpBind;
         private bool _savedAllowInsecureRemoteHttp;
         private bool _savedLaunchConfirmed;
+        private StringEditorPrefSnapshot _projectHttpUrl;
+        private StringEditorPrefSnapshot _projectHttpRemoteUrl;
 
         [SetUp]
         public void SetUp()
@@ -42,6 +44,12 @@ namespace MCPForUnityTests.Editor.Services.Characterization
             _savedHttpTransportScope = EditorPrefs.GetString(EditorPrefKeys.HttpTransportScope, string.Empty);
             _savedAllowLanHttpBind = EditorPrefs.GetBool(EditorPrefKeys.AllowLanHttpBind, false);
             _savedAllowInsecureRemoteHttp = EditorPrefs.GetBool(EditorPrefKeys.AllowInsecureRemoteHttp, false);
+            _projectHttpUrl = StringEditorPrefSnapshot.Capture(
+                HttpEndpointUtility.GetProjectScopedPrefKey(EditorPrefKeys.HttpBaseUrl));
+            _projectHttpRemoteUrl = StringEditorPrefSnapshot.Capture(
+                HttpEndpointUtility.GetProjectScopedPrefKey(EditorPrefKeys.HttpRemoteBaseUrl));
+            EditorPrefs.DeleteKey(_projectHttpUrl.Key);
+            EditorPrefs.DeleteKey(_projectHttpRemoteUrl.Key);
         }
 
         [TearDown]
@@ -76,6 +84,8 @@ namespace MCPForUnityTests.Editor.Services.Characterization
             EditorPrefs.SetBool(EditorPrefKeys.AllowLanHttpBind, _savedAllowLanHttpBind);
             EditorPrefs.SetBool(EditorPrefKeys.AllowInsecureRemoteHttp, _savedAllowInsecureRemoteHttp);
             EditorPrefs.SetBool(EditorPrefKeys.HttpServerLaunchConfirmed, _savedLaunchConfirmed);
+            _projectHttpUrl.Restore();
+            _projectHttpRemoteUrl.Restore();
             // Refresh cache to reflect restored values
             EditorConfigurationCache.Instance.Refresh();
         }

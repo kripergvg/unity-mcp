@@ -1,6 +1,7 @@
 using NUnit.Framework;
 using MCPForUnity.Editor.Services;
 using MCPForUnity.Editor.Constants;
+using MCPForUnity.Editor.Helpers;
 using UnityEditor;
 
 namespace MCPForUnityTests.Editor.Services
@@ -14,6 +15,10 @@ namespace MCPForUnityTests.Editor.Services
         private bool _originalUseHttpTransport;
         private bool _originalDebugLogs;
         private string _originalUvxPath;
+        private StringEditorPrefSnapshot _globalHttpUrl;
+        private StringEditorPrefSnapshot _projectHttpUrl;
+        private StringEditorPrefSnapshot _globalHttpRemoteUrl;
+        private StringEditorPrefSnapshot _projectHttpRemoteUrl;
 
         [SetUp]
         public void SetUp()
@@ -22,6 +27,14 @@ namespace MCPForUnityTests.Editor.Services
             _originalUseHttpTransport = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
             _originalDebugLogs = EditorPrefs.GetBool(EditorPrefKeys.DebugLogs, false);
             _originalUvxPath = EditorPrefs.GetString(EditorPrefKeys.UvxPathOverride, string.Empty);
+            _globalHttpUrl = StringEditorPrefSnapshot.Capture(EditorPrefKeys.HttpBaseUrl);
+            _projectHttpUrl = StringEditorPrefSnapshot.Capture(
+                HttpEndpointUtility.GetProjectScopedPrefKey(EditorPrefKeys.HttpBaseUrl));
+            _globalHttpRemoteUrl = StringEditorPrefSnapshot.Capture(EditorPrefKeys.HttpRemoteBaseUrl);
+            _projectHttpRemoteUrl = StringEditorPrefSnapshot.Capture(
+                HttpEndpointUtility.GetProjectScopedPrefKey(EditorPrefKeys.HttpRemoteBaseUrl));
+            EditorPrefs.DeleteKey(_projectHttpUrl.Key);
+            EditorPrefs.DeleteKey(_projectHttpRemoteUrl.Key);
 
             // Refresh cache to ensure clean state
             EditorConfigurationCache.Instance.Refresh();
@@ -34,6 +47,10 @@ namespace MCPForUnityTests.Editor.Services
             EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, _originalUseHttpTransport);
             EditorPrefs.SetBool(EditorPrefKeys.DebugLogs, _originalDebugLogs);
             EditorPrefs.SetString(EditorPrefKeys.UvxPathOverride, _originalUvxPath);
+            _globalHttpUrl.Restore();
+            _projectHttpUrl.Restore();
+            _globalHttpRemoteUrl.Restore();
+            _projectHttpRemoteUrl.Restore();
 
             // Refresh cache
             EditorConfigurationCache.Instance.Refresh();
@@ -104,6 +121,20 @@ namespace MCPForUnityTests.Editor.Services
             Assert.AreEqual(testPath, EditorConfigurationCache.Instance.UvxPathOverride);
         }
 
+        [Test]
+        public void Refresh_HttpUrlsUseProjectOverrides()
+        {
+            EditorPrefs.SetString(EditorPrefKeys.HttpBaseUrl, "http://127.0.0.1:8081");
+            EditorPrefs.SetString(EditorPrefKeys.HttpRemoteBaseUrl, "https://global.example");
+            HttpEndpointUtility.SaveLocalBaseUrl("http://127.0.0.1:8090");
+            HttpEndpointUtility.SaveRemoteBaseUrl("https://project.example");
+
+            EditorConfigurationCache.Instance.Refresh();
+
+            Assert.AreEqual("http://127.0.0.1:8090", EditorConfigurationCache.Instance.HttpBaseUrl);
+            Assert.AreEqual("https://project.example", EditorConfigurationCache.Instance.HttpRemoteBaseUrl);
+        }
+
         #endregion
 
         #region Write Tests
@@ -158,6 +189,24 @@ namespace MCPForUnityTests.Editor.Services
 
             // Assert
             Assert.AreEqual(string.Empty, EditorConfigurationCache.Instance.UvxPathOverride);
+        }
+
+        [Test]
+        public void SetHttpUrls_WritesProjectOverridesWithoutChangingGlobalValues()
+        {
+            EditorPrefs.SetString(EditorPrefKeys.HttpBaseUrl, "http://127.0.0.1:8081");
+            EditorPrefs.SetString(EditorPrefKeys.HttpRemoteBaseUrl, "https://global.example");
+            EditorConfigurationCache.Instance.Refresh();
+
+            EditorConfigurationCache.Instance.SetHttpBaseUrl("http://localhost:8090/mcp/");
+            EditorConfigurationCache.Instance.SetHttpRemoteBaseUrl("project.example/mcp/");
+
+            Assert.AreEqual("http://127.0.0.1:8090", EditorConfigurationCache.Instance.HttpBaseUrl);
+            Assert.AreEqual("https://project.example", EditorConfigurationCache.Instance.HttpRemoteBaseUrl);
+            Assert.AreEqual("http://127.0.0.1:8081",
+                EditorPrefs.GetString(EditorPrefKeys.HttpBaseUrl));
+            Assert.AreEqual("https://global.example",
+                EditorPrefs.GetString(EditorPrefKeys.HttpRemoteBaseUrl));
         }
 
         #endregion

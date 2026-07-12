@@ -1,5 +1,6 @@
 using System;
 using MCPForUnity.Editor.Constants;
+using MCPForUnity.Editor.Helpers;
 using UnityEditor;
 
 namespace MCPForUnity.Editor.Services
@@ -88,13 +89,13 @@ namespace MCPForUnity.Editor.Services
         public string GitUrlOverride => _gitUrlOverride;
 
         /// <summary>
-        /// HTTP base URL for the local MCP server.
-        /// Default: empty string
+        /// HTTP base URL for the local MCP server in the current project.
+        /// Default: http://127.0.0.1:8080
         /// </summary>
         public string HttpBaseUrl => _httpBaseUrl;
 
         /// <summary>
-        /// HTTP base URL for the remote-hosted MCP server.
+        /// HTTP base URL for the remote-hosted MCP server in the current project.
         /// Default: empty string
         /// </summary>
         public string HttpRemoteBaseUrl => _httpRemoteBaseUrl;
@@ -133,8 +134,8 @@ namespace MCPForUnity.Editor.Services
             _devModeForceServerRefresh = EditorPrefs.GetBool(EditorPrefKeys.DevModeForceServerRefresh, false);
             _uvxPathOverride = EditorPrefs.GetString(EditorPrefKeys.UvxPathOverride, string.Empty);
             _gitUrlOverride = EditorPrefs.GetString(EditorPrefKeys.GitUrlOverride, string.Empty);
-            _httpBaseUrl = EditorPrefs.GetString(EditorPrefKeys.HttpBaseUrl, string.Empty);
-            _httpRemoteBaseUrl = EditorPrefs.GetString(EditorPrefKeys.HttpRemoteBaseUrl, string.Empty);
+            _httpBaseUrl = HttpEndpointUtility.GetLocalBaseUrl();
+            _httpRemoteBaseUrl = HttpEndpointUtility.GetRemoteBaseUrl();
             _claudeCliPathOverride = EditorPrefs.GetString(EditorPrefKeys.ClaudeCliPathOverride, string.Empty);
             _httpTransportScope = EditorPrefs.GetString(EditorPrefKeys.HttpTransportScope, string.Empty);
             _unitySocketPort = EditorPrefs.GetInt(EditorPrefKeys.UnitySocketPort, 0);
@@ -208,29 +209,29 @@ namespace MCPForUnity.Editor.Services
         }
 
         /// <summary>
-        /// Set HttpBaseUrl and update cache + EditorPrefs atomically.
+        /// Set the current project's HttpBaseUrl and update the cache.
         /// </summary>
         public void SetHttpBaseUrl(string value)
         {
-            value = value ?? string.Empty;
-            if (_httpBaseUrl != value)
+            HttpEndpointUtility.SaveLocalBaseUrl(value);
+            string normalized = HttpEndpointUtility.GetLocalBaseUrl();
+            if (_httpBaseUrl != normalized)
             {
-                _httpBaseUrl = value;
-                EditorPrefs.SetString(EditorPrefKeys.HttpBaseUrl, value);
+                _httpBaseUrl = normalized;
                 OnConfigurationChanged?.Invoke(nameof(HttpBaseUrl));
             }
         }
 
         /// <summary>
-        /// Set HttpRemoteBaseUrl and update cache + EditorPrefs atomically.
+        /// Set the current project's HttpRemoteBaseUrl and update the cache.
         /// </summary>
         public void SetHttpRemoteBaseUrl(string value)
         {
-            value = value ?? string.Empty;
-            if (_httpRemoteBaseUrl != value)
+            HttpEndpointUtility.SaveRemoteBaseUrl(value);
+            string normalized = HttpEndpointUtility.GetRemoteBaseUrl();
+            if (_httpRemoteBaseUrl != normalized)
             {
-                _httpRemoteBaseUrl = value;
-                EditorPrefs.SetString(EditorPrefKeys.HttpRemoteBaseUrl, value);
+                _httpRemoteBaseUrl = normalized;
                 OnConfigurationChanged?.Invoke(nameof(HttpRemoteBaseUrl));
             }
         }
@@ -300,10 +301,10 @@ namespace MCPForUnity.Editor.Services
                     _gitUrlOverride = EditorPrefs.GetString(EditorPrefKeys.GitUrlOverride, string.Empty);
                     break;
                 case nameof(HttpBaseUrl):
-                    _httpBaseUrl = EditorPrefs.GetString(EditorPrefKeys.HttpBaseUrl, string.Empty);
+                    _httpBaseUrl = HttpEndpointUtility.GetLocalBaseUrl();
                     break;
                 case nameof(HttpRemoteBaseUrl):
-                    _httpRemoteBaseUrl = EditorPrefs.GetString(EditorPrefKeys.HttpRemoteBaseUrl, string.Empty);
+                    _httpRemoteBaseUrl = HttpEndpointUtility.GetRemoteBaseUrl();
                     break;
                 case nameof(ClaudeCliPathOverride):
                     _claudeCliPathOverride = EditorPrefs.GetString(EditorPrefKeys.ClaudeCliPathOverride, string.Empty);

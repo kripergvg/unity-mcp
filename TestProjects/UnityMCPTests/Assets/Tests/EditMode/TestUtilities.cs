@@ -136,5 +136,37 @@ namespace MCPForUnityTests.Editor
             }
         }
     }
-}
 
+    public readonly struct StringEditorPrefSnapshot
+    {
+        public string Key { get; }
+
+        private bool Exists { get; }
+        private string Value { get; }
+
+        private StringEditorPrefSnapshot(string key, bool exists, string value)
+        {
+            Key = key;
+            Exists = exists;
+            Value = value;
+        }
+
+        public static StringEditorPrefSnapshot Capture(string key)
+        {
+            bool exists = EditorPrefs.HasKey(key);
+            return new StringEditorPrefSnapshot(key, exists, EditorPrefs.GetString(key, string.Empty));
+        }
+
+        public void Restore()
+        {
+            if (Exists)
+            {
+                EditorPrefs.SetString(Key, Value);
+            }
+            else
+            {
+                EditorPrefs.DeleteKey(Key);
+            }
+        }
+    }
+}

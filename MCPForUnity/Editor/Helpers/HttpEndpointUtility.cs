@@ -12,8 +12,9 @@ namespace MCPForUnity.Editor.Helpers
     /// Ensures the stored value is always the base URL (without trailing path),
     /// and provides convenience accessors for specific endpoints.
     ///
-    /// HTTP Local and HTTP Remote use separate EditorPrefs keys so that switching
-    /// between scopes does not overwrite the other scope's URL.
+    /// HTTP Local and HTTP Remote use separate, project-scoped EditorPrefs keys so that
+    /// switching scopes or editing another Unity project does not overwrite either URL.
+    /// Legacy user-wide keys remain supported as fallback defaults.
     /// </summary>
     public static class HttpEndpointUtility
     {
@@ -47,30 +48,40 @@ namespace MCPForUnity.Editor.Helpers
         }
 
         /// <summary>
-        /// Returns the normalized local HTTP base URL (always reads local pref).
+        /// Returns the normalized local HTTP base URL for the current project.
+        /// Falls back to the legacy user-wide preference when no project override exists.
         /// </summary>
         public static string GetLocalBaseUrl()
         {
-            string stored = EditorPrefs.GetString(LocalPrefKey, DefaultLocalBaseUrl);
+            string stored = GetProjectScopedString(LocalPrefKey, DefaultLocalBaseUrl);
             return NormalizeBaseUrl(stored, DefaultLocalBaseUrl, remoteScope: false);
         }
 
         /// <summary>
-        /// Saves a user-provided URL to the local HTTP pref.
+        /// Saves a user-provided URL as the current project's local HTTP override.
         /// </summary>
         public static void SaveLocalBaseUrl(string userValue)
         {
             string normalized = NormalizeBaseUrl(userValue, DefaultLocalBaseUrl, remoteScope: false);
-            EditorPrefs.SetString(LocalPrefKey, normalized);
+            EditorPrefs.SetString(GetProjectScopedPrefKey(LocalPrefKey), normalized);
         }
 
         /// <summary>
-        /// Returns the normalized remote HTTP base URL (always reads remote pref).
+        /// Clears the current project's local HTTP override so the legacy user-wide value is used.
+        /// </summary>
+        public static void ClearLocalBaseUrlOverride()
+        {
+            EditorPrefs.DeleteKey(GetProjectScopedPrefKey(LocalPrefKey));
+        }
+
+        /// <summary>
+        /// Returns the normalized remote HTTP base URL for the current project.
+        /// Falls back to the legacy user-wide preference when no project override exists.
         /// Returns empty string if no remote URL is configured.
         /// </summary>
         public static string GetRemoteBaseUrl()
         {
-            string stored = EditorPrefs.GetString(RemotePrefKey, DefaultRemoteBaseUrl);
+            string stored = GetProjectScopedString(RemotePrefKey, DefaultRemoteBaseUrl);
             if (string.IsNullOrWhiteSpace(stored))
             {
                 return DefaultRemoteBaseUrl;
@@ -79,17 +90,25 @@ namespace MCPForUnity.Editor.Helpers
         }
 
         /// <summary>
-        /// Saves a user-provided URL to the remote HTTP pref.
+        /// Saves a user-provided URL as the current project's remote HTTP override.
         /// </summary>
         public static void SaveRemoteBaseUrl(string userValue)
         {
             if (string.IsNullOrWhiteSpace(userValue))
             {
-                EditorPrefs.SetString(RemotePrefKey, DefaultRemoteBaseUrl);
+                EditorPrefs.SetString(GetProjectScopedPrefKey(RemotePrefKey), DefaultRemoteBaseUrl);
                 return;
             }
             string normalized = NormalizeBaseUrl(userValue, DefaultRemoteBaseUrl, remoteScope: true);
-            EditorPrefs.SetString(RemotePrefKey, normalized);
+            EditorPrefs.SetString(GetProjectScopedPrefKey(RemotePrefKey), normalized);
+        }
+
+        /// <summary>
+        /// Clears the current project's remote HTTP override so the legacy user-wide value is used.
+        /// </summary>
+        public static void ClearRemoteBaseUrlOverride()
+        {
+            EditorPrefs.DeleteKey(GetProjectScopedPrefKey(RemotePrefKey));
         }
 
         /// <summary>
@@ -304,6 +323,19 @@ namespace MCPForUnity.Editor.Helpers
             return AllowLanHttpBind()
                 ? "localhost/127.0.0.1/::1/0.0.0.0/::"
                 : "localhost/127.0.0.1/::1";
+        }
+
+        internal static string GetProjectScopedPrefKey(string prefKey)
+        {
+            return $"{prefKey}_{ProjectIdentityUtility.GetProjectHash()}";
+        }
+
+        private static string GetProjectScopedString(string prefKey, string defaultValue)
+        {
+            string projectKey = GetProjectScopedPrefKey(prefKey);
+            return EditorPrefs.HasKey(projectKey)
+                ? EditorPrefs.GetString(projectKey, defaultValue)
+                : EditorPrefs.GetString(prefKey, defaultValue);
         }
 
         /// <summary>

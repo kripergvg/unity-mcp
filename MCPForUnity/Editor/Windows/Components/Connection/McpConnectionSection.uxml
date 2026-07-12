@@ -14,8 +14,8 @@
                 <ui:Label name="version-mismatch-text" class="warning-banner-text" />
             </ui:VisualElement>
             <ui:VisualElement class="setting-row" name="http-url-row">
-                <ui:Label text="HTTP URL:" class="setting-label" />
-                <ui:TextField name="http-url" class="url-field" />
+                <ui:Label text="HTTP URL:" class="setting-label" tooltip="Saved separately for each Unity project." />
+                <ui:TextField name="http-url" class="url-field" tooltip="Saved separately for each Unity project." />
             </ui:VisualElement>
             <ui:VisualElement name="api-key-row" style="margin-bottom: 4px;">
                 <ui:VisualElement class="setting-row">
