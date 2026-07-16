@@ -1,5 +1,7 @@
 using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Helpers;
+using System;
+using System.IO;
 using NUnit.Framework;
 using UnityEditor;
 
@@ -12,10 +14,16 @@ namespace MCPForUnityTests.Editor.Helpers
         private StringEditorPrefSnapshot _projectLocal;
         private StringEditorPrefSnapshot _globalRemote;
         private StringEditorPrefSnapshot _projectRemote;
+        private string _projectConfigPath;
 
         [SetUp]
         public void SetUp()
         {
+            _projectConfigPath = Path.Combine(
+                Path.GetTempPath(),
+                $"MCPForUnityProject-{Guid.NewGuid():N}.json");
+            ProjectIsolationConfiguration.SetConfigPathForTests(_projectConfigPath);
+
             _globalLocal = StringEditorPrefSnapshot.Capture(EditorPrefKeys.HttpBaseUrl);
             _projectLocal = StringEditorPrefSnapshot.Capture(
                 HttpEndpointUtility.GetProjectScopedPrefKey(EditorPrefKeys.HttpBaseUrl));
@@ -30,6 +38,10 @@ namespace MCPForUnityTests.Editor.Helpers
         [TearDown]
         public void TearDown()
         {
+            if (File.Exists(_projectConfigPath))
+                File.Delete(_projectConfigPath);
+            ProjectIsolationConfiguration.ResetForTests();
+
             _globalLocal.Restore();
             _projectLocal.Restore();
             _globalRemote.Restore();
@@ -85,6 +97,46 @@ namespace MCPForUnityTests.Editor.Helpers
 
             Assert.AreEqual("http://127.0.0.1:8081", HttpEndpointUtility.GetLocalBaseUrl());
             Assert.AreEqual("https://global.example", HttpEndpointUtility.GetRemoteBaseUrl());
+        }
+
+        [Test]
+        public void GetLocalBaseUrl_ProjectIsolationFileOverridesEditorPrefs()
+        {
+            EditorPrefs.SetString(EditorPrefKeys.HttpBaseUrl, "http://127.0.0.1:8081");
+            File.WriteAllText(_projectConfigPath,
+                "{\"schemaVersion\":1,\"httpPort\":18123," +
+                "\"serverSource\":\"mcpforunityserver==10.0.0\"}");
+            ProjectIsolationConfiguration.SetConfigPathForTests(_projectConfigPath);
+
+            Assert.IsTrue(ProjectIsolationConfiguration.IsEnabled);
+            Assert.AreEqual("http://127.0.0.1:18123", HttpEndpointUtility.GetLocalBaseUrl());
+            Assert.IsFalse(HttpEndpointUtility.IsRemoteScope());
+        }
+
+        [Test]
+        public void ProjectIsolationConfiguration_InvalidPortThrows()
+        {
+            File.WriteAllText(_projectConfigPath,
+                "{\"schemaVersion\":1,\"httpPort\":80," +
+                "\"serverSource\":\"mcpforunityserver==10.0.0\"}");
+            ProjectIsolationConfiguration.SetConfigPathForTests(_projectConfigPath);
+
+            Assert.Throws<InvalidDataException>(
+                () => _ = ProjectIsolationConfiguration.Current);
+        }
+
+        [Test]
+        public void SaveLocalBaseUrl_ProjectIsolationRejectsDifferentUrl()
+        {
+            File.WriteAllText(_projectConfigPath,
+                "{\"schemaVersion\":1,\"httpPort\":18123," +
+                "\"serverSource\":\"mcpforunityserver==10.0.0\"}");
+            ProjectIsolationConfiguration.SetConfigPathForTests(_projectConfigPath);
+
+            Assert.Throws<InvalidOperationException>(
+                () => HttpEndpointUtility.SaveLocalBaseUrl("http://127.0.0.1:18124"));
+            Assert.DoesNotThrow(
+                () => HttpEndpointUtility.SaveLocalBaseUrl("http://127.0.0.1:18123"));
         }
 
     }

@@ -212,6 +212,10 @@ namespace MCPForUnity.Editor.Helpers
         /// <returns>Package source string for uvx --from argument</returns>
         public static string GetMcpServerPackageSource()
         {
+            ProjectIsolationConfiguration isolated = ProjectIsolationConfiguration.Current;
+            if (isolated != null)
+                return isolated.ServerSource;
+
             // Check for override first (supports git URLs, file:// paths, local paths)
             string sourceOverride = EditorPrefs.GetString(EditorPrefKeys.GitUrlOverride, "");
             if (!string.IsNullOrEmpty(sourceOverride))
@@ -329,7 +333,9 @@ namespace MCPForUnity.Editor.Helpers
         /// <returns>The package source arguments (e.g., "--prerelease explicit --from mcpforunityserver>=0.0.0a0")</returns>
         public static string GetBetaServerFromArgs(bool quoteFromPath = false)
         {
-            string gitUrlOverride = EditorPrefs.GetString(EditorPrefKeys.GitUrlOverride, "");
+            string gitUrlOverride = ProjectIsolationConfiguration.IsEnabled
+                ? string.Empty
+                : EditorPrefs.GetString(EditorPrefKeys.GitUrlOverride, "");
             string packageSource = GetMcpServerPackageSource();
             return GetBetaServerFromArgs(gitUrlOverride, packageSource, quoteFromPath);
         }
@@ -380,7 +386,9 @@ namespace MCPForUnity.Editor.Helpers
         /// <returns>List of arguments to add to uvx command</returns>
         public static System.Collections.Generic.IList<string> GetBetaServerFromArgsList()
         {
-            string gitUrlOverride = EditorPrefs.GetString(EditorPrefKeys.GitUrlOverride, "");
+            string gitUrlOverride = ProjectIsolationConfiguration.IsEnabled
+                ? string.Empty
+                : EditorPrefs.GetString(EditorPrefKeys.GitUrlOverride, "");
             string packageSource = GetMcpServerPackageSource();
             return GetBetaServerFromArgsList(gitUrlOverride, packageSource);
         }

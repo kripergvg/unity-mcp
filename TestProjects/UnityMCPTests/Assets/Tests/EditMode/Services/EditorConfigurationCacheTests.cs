@@ -1,3 +1,5 @@
+using System;
+using System.IO;
 using NUnit.Framework;
 using MCPForUnity.Editor.Services;
 using MCPForUnity.Editor.Constants;
@@ -19,14 +21,24 @@ namespace MCPForUnityTests.Editor.Services
         private StringEditorPrefSnapshot _projectHttpUrl;
         private StringEditorPrefSnapshot _globalHttpRemoteUrl;
         private StringEditorPrefSnapshot _projectHttpRemoteUrl;
+        private string _originalHttpTransportScope;
+        private string _projectConfigPath;
 
         [SetUp]
         public void SetUp()
         {
+            _projectConfigPath = Path.Combine(
+                Path.GetTempPath(),
+                $"MCPForUnityProject-{Guid.NewGuid():N}.json");
+            ProjectIsolationConfiguration.SetConfigPathForTests(_projectConfigPath);
+
             // Save original values
             _originalUseHttpTransport = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
             _originalDebugLogs = EditorPrefs.GetBool(EditorPrefKeys.DebugLogs, false);
             _originalUvxPath = EditorPrefs.GetString(EditorPrefKeys.UvxPathOverride, string.Empty);
+            _originalHttpTransportScope = EditorPrefs.GetString(
+                EditorPrefKeys.HttpTransportScope,
+                string.Empty);
             _globalHttpUrl = StringEditorPrefSnapshot.Capture(EditorPrefKeys.HttpBaseUrl);
             _projectHttpUrl = StringEditorPrefSnapshot.Capture(
                 HttpEndpointUtility.GetProjectScopedPrefKey(EditorPrefKeys.HttpBaseUrl));
@@ -43,10 +55,15 @@ namespace MCPForUnityTests.Editor.Services
         [TearDown]
         public void TearDown()
         {
+            if (File.Exists(_projectConfigPath))
+                File.Delete(_projectConfigPath);
+            ProjectIsolationConfiguration.ResetForTests();
+
             // Restore original values
             EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, _originalUseHttpTransport);
             EditorPrefs.SetBool(EditorPrefKeys.DebugLogs, _originalDebugLogs);
             EditorPrefs.SetString(EditorPrefKeys.UvxPathOverride, _originalUvxPath);
+            EditorPrefs.SetString(EditorPrefKeys.HttpTransportScope, _originalHttpTransportScope);
             _globalHttpUrl.Restore();
             _projectHttpUrl.Restore();
             _globalHttpRemoteUrl.Restore();
@@ -133,6 +150,25 @@ namespace MCPForUnityTests.Editor.Services
 
             Assert.AreEqual("http://127.0.0.1:8090", EditorConfigurationCache.Instance.HttpBaseUrl);
             Assert.AreEqual("https://project.example", EditorConfigurationCache.Instance.HttpRemoteBaseUrl);
+        }
+
+        [Test]
+        public void Refresh_ProjectIsolationForcesHttpLocalConfiguration()
+        {
+            EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, false);
+            EditorPrefs.SetString(EditorPrefKeys.HttpTransportScope, "remote");
+            File.WriteAllText(_projectConfigPath,
+                "{\"schemaVersion\":1,\"httpPort\":18125," +
+                "\"serverSource\":\"mcpforunityserver==10.0.0\"}");
+            ProjectIsolationConfiguration.SetConfigPathForTests(_projectConfigPath);
+
+            EditorConfigurationCache.Instance.Refresh();
+
+            Assert.IsTrue(EditorConfigurationCache.Instance.IsProjectIsolationEnabled);
+            Assert.IsTrue(EditorConfigurationCache.Instance.UseHttpTransport);
+            Assert.AreEqual("local", EditorConfigurationCache.Instance.HttpTransportScope);
+            Assert.AreEqual("http://127.0.0.1:18125",
+                EditorConfigurationCache.Instance.HttpBaseUrl);
         }
 
         #endregion

@@ -20,6 +20,8 @@ class ServerConfig:
 
     # HTTP transport behaviour
     http_remote_hosted: bool = False
+    project_isolated: bool = False
+    expected_project_hash: str | None = None
 
     # API key authentication (required when http_remote_hosted=True)
     api_key_validation_url: str | None = None  # POST endpoint to validate keys

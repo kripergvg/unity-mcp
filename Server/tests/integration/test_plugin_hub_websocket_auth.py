@@ -181,3 +181,53 @@ class TestUserIdFlowsToRegistration:
         assert session.user_id == "user-99"
         assert session.project_name == "TestProject"
         assert session.project_hash == "abc123"
+
+
+class TestProjectIsolation:
+    @pytest.mark.asyncio
+    async def test_mismatched_project_is_rejected(self, monkeypatch):
+        monkeypatch.setattr(config, "http_remote_hosted", False)
+        monkeypatch.setattr(config, "project_isolated", True)
+        monkeypatch.setattr(
+            config, "expected_project_hash", "0123456789abcdef")
+
+        registry = PluginRegistry()
+        PluginHub.configure(registry, asyncio.get_running_loop())
+        ws = _make_mock_websocket(headers={})
+        hub = _make_hub()
+
+        await hub.on_receive(ws, {
+            "type": "register",
+            "project_name": "WrongProject",
+            "project_hash": "fedcba9876543210",
+            "unity_version": "6000.3.19f1",
+        })
+
+        ws.close.assert_called_once_with(
+            code=4409,
+            reason="Unity project does not match this isolated server",
+        )
+        assert await registry.list_sessions() == {}
+
+    @pytest.mark.asyncio
+    async def test_expected_project_is_registered(self, monkeypatch):
+        monkeypatch.setattr(config, "http_remote_hosted", False)
+        monkeypatch.setattr(config, "project_isolated", True)
+        monkeypatch.setattr(
+            config, "expected_project_hash", "0123456789abcdef")
+
+        registry = PluginRegistry()
+        PluginHub.configure(registry, asyncio.get_running_loop())
+        ws = _make_mock_websocket(headers={})
+        hub = _make_hub()
+
+        await hub.on_receive(ws, {
+            "type": "register",
+            "project_name": "ExpectedProject",
+            "project_hash": "0123456789abcdef",
+            "unity_version": "6000.3.19f1",
+        })
+
+        sessions = await registry.list_sessions()
+        assert len(sessions) == 1
+        assert next(iter(sessions.values())).project_name == "ExpectedProject"

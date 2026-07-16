@@ -359,6 +359,12 @@ namespace MCPForUnity.Editor.Services
                         : (extraPathPrepend + Path.PathSeparator + currentPath);
                 }
 
+                startInfo.EnvironmentVariables["UNITY_MCP_LOG_DIR"] = Path.Combine(
+                    _terminalLauncher.GetProjectRootPath(),
+                    "Library",
+                    "MCPForUnity",
+                    "Logs");
+
                 _lastLaunchedProcess = System.Diagnostics.Process.Start(startInfo);
                 if (!string.IsNullOrEmpty(pidFilePath))
                 {

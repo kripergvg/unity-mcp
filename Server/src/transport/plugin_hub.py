@@ -418,6 +418,17 @@ class PluginHub(WebSocketEndpoint):
             raise ValueError(
                 "Plugin registration missing project_hash")
 
+        if config.project_isolated:
+            expected_hash = (config.expected_project_hash or "").lower()
+            if project_hash.lower() != expected_hash:
+                await websocket.close(
+                    code=4409,
+                    reason="Unity project does not match this isolated server",
+                )
+                raise ValueError(
+                    f"Rejected Unity project hash '{project_hash}'; "
+                    f"this isolated server expects '{expected_hash}'")
+
         # Get user_id from websocket state (set during API key validation)
         user_id = getattr(websocket.state, "user_id", None)
 

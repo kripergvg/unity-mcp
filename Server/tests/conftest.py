@@ -70,6 +70,8 @@ def restore_global_config():
     prior = {
         "transport_mode": global_config.transport_mode,
         "http_remote_hosted": global_config.http_remote_hosted,
+        "project_isolated": global_config.project_isolated,
+        "expected_project_hash": global_config.expected_project_hash,
         "api_key_validation_url": global_config.api_key_validation_url,
         "api_key_login_url": global_config.api_key_login_url,
         "api_key_cache_ttl": global_config.api_key_cache_ttl,

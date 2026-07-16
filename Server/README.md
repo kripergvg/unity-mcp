@@ -137,6 +137,8 @@ These options apply to the `mcp-for-unity` command (whether run via `uvx`, Docke
 - `--api-key-service-token TOKEN` - Token value sent to the auth service for server authentication
 - `--default-instance INSTANCE` - Default Unity instance to target (project name, hash, or `Name@hash`)
 - `--project-scoped-tools` - Keep custom tools scoped to the active Unity project and enable the custom tools resource
+- `--project-isolated` - Restrict a local HTTP server to one expected Unity project
+- `--expected-project-hash HASH` - Expected 16-character Unity project path hash used with `--project-isolated`
 - `--unity-instance-token TOKEN` - Optional per-launch token set by Unity for deterministic lifecycle management
 - `--pidfile PATH` - Optional path where the server writes its PID on startup (used by Unity-managed terminal launches)
 
@@ -148,6 +150,22 @@ These options apply to the `mcp-for-unity` command (whether run via `uvx`, Docke
 - `UNITY_MCP_HTTP_PORT` - HTTP bind port (overrides URL port)
 - `UNITY_MCP_HTTP_REMOTE_HOSTED` - Enable remote-hosted mode (`true`, `1`, or `yes`)
 - `UNITY_MCP_DEFAULT_INSTANCE` - Default Unity instance to target (project name, hash, or `Name@hash`)
+- `UNITY_MCP_PROJECT_ISOLATED` - Restrict a local HTTP server to one expected Unity project
+- `UNITY_MCP_EXPECTED_PROJECT_HASH` - Expected 16-character Unity project path hash
+
+When Unity is managed by a reusable worktree, place a project-local configuration at
+`UserSettings/MCPForUnityProject.json`:
+
+```json
+{
+  "schemaVersion": 1,
+  "httpPort": 18101,
+  "serverSource": "git+https://github.com/OWNER/unity-mcp.git@COMMIT#subdirectory=Server"
+}
+```
+
+The file forces local HTTP transport, auto-starts the server, and makes the configured
+server source override EditorPrefs and the package's default PyPI source.
 - `UNITY_MCP_SKIP_STARTUP_CONNECT=1` - Skip initial Unity connection attempt on startup
 - `UNITY_MCP_LOG_DIR` - Override the rotating server log directory. Default: `%LOCALAPPDATA%\UnityMCP\Logs` (Windows), `~/Library/Application Support/UnityMCP/Logs` (macOS), `$XDG_STATE_HOME/UnityMCP/Logs` (Linux/BSD, defaults to `~/.local/state/UnityMCP/Logs`).
 

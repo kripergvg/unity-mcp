@@ -5,6 +5,7 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using MCPForUnity.Editor.Constants;
+using MCPForUnity.Editor.Helpers;
 using UnityEditor;
 using UnityEngine;
 
@@ -117,7 +118,9 @@ namespace MCPForUnity.Editor.Services.Server
             {
                 if (!string.IsNullOrEmpty(pidFilePath))
                 {
-                    EditorPrefs.SetString(EditorPrefKeys.LastLocalHttpServerPidFilePath, pidFilePath);
+                    EditorPrefs.SetString(
+                        GetProjectScopedPrefKey(EditorPrefKeys.LastLocalHttpServerPidFilePath),
+                        pidFilePath);
                 }
             }
             catch { }
@@ -126,7 +129,9 @@ namespace MCPForUnity.Editor.Services.Server
             {
                 if (!string.IsNullOrEmpty(instanceToken))
                 {
-                    EditorPrefs.SetString(EditorPrefKeys.LastLocalHttpServerInstanceToken, instanceToken);
+                    EditorPrefs.SetString(
+                        GetProjectScopedPrefKey(EditorPrefKeys.LastLocalHttpServerInstanceToken),
+                        instanceToken);
                 }
             }
             catch { }
@@ -139,8 +144,12 @@ namespace MCPForUnity.Editor.Services.Server
             instanceToken = null;
             try
             {
-                pidFilePath = EditorPrefs.GetString(EditorPrefKeys.LastLocalHttpServerPidFilePath, string.Empty);
-                instanceToken = EditorPrefs.GetString(EditorPrefKeys.LastLocalHttpServerInstanceToken, string.Empty);
+                pidFilePath = EditorPrefs.GetString(
+                    GetProjectScopedPrefKey(EditorPrefKeys.LastLocalHttpServerPidFilePath),
+                    string.Empty);
+                instanceToken = EditorPrefs.GetString(
+                    GetProjectScopedPrefKey(EditorPrefKeys.LastLocalHttpServerInstanceToken),
+                    string.Empty);
                 if (string.IsNullOrEmpty(pidFilePath) || string.IsNullOrEmpty(instanceToken))
                 {
                     pidFilePath = null;
@@ -160,18 +169,21 @@ namespace MCPForUnity.Editor.Services.Server
         /// <inheritdoc/>
         public void StoreTracking(int pid, int port, string argsHash = null)
         {
-            try { EditorPrefs.SetInt(EditorPrefKeys.LastLocalHttpServerPid, pid); } catch { }
-            try { EditorPrefs.SetInt(EditorPrefKeys.LastLocalHttpServerPort, port); } catch { }
-            try { EditorPrefs.SetString(EditorPrefKeys.LastLocalHttpServerStartedUtc, DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture)); } catch { }
+            try { EditorPrefs.SetInt(GetProjectScopedPrefKey(EditorPrefKeys.LastLocalHttpServerPid), pid); } catch { }
+            try { EditorPrefs.SetInt(GetProjectScopedPrefKey(EditorPrefKeys.LastLocalHttpServerPort), port); } catch { }
+            try { EditorPrefs.SetString(GetProjectScopedPrefKey(EditorPrefKeys.LastLocalHttpServerStartedUtc), DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture)); } catch { }
             try
             {
                 if (!string.IsNullOrEmpty(argsHash))
                 {
-                    EditorPrefs.SetString(EditorPrefKeys.LastLocalHttpServerPidArgsHash, argsHash);
+                    EditorPrefs.SetString(
+                        GetProjectScopedPrefKey(EditorPrefKeys.LastLocalHttpServerPidArgsHash),
+                        argsHash);
                 }
                 else
                 {
-                    EditorPrefs.DeleteKey(EditorPrefKeys.LastLocalHttpServerPidArgsHash);
+                    EditorPrefs.DeleteKey(
+                        GetProjectScopedPrefKey(EditorPrefKeys.LastLocalHttpServerPidArgsHash));
                 }
             }
             catch { }
@@ -183,9 +195,13 @@ namespace MCPForUnity.Editor.Services.Server
             pid = 0;
             try
             {
-                int storedPid = EditorPrefs.GetInt(EditorPrefKeys.LastLocalHttpServerPid, 0);
-                int storedPort = EditorPrefs.GetInt(EditorPrefKeys.LastLocalHttpServerPort, 0);
-                string storedUtc = EditorPrefs.GetString(EditorPrefKeys.LastLocalHttpServerStartedUtc, string.Empty);
+                int storedPid = EditorPrefs.GetInt(
+                    GetProjectScopedPrefKey(EditorPrefKeys.LastLocalHttpServerPid), 0);
+                int storedPort = EditorPrefs.GetInt(
+                    GetProjectScopedPrefKey(EditorPrefKeys.LastLocalHttpServerPort), 0);
+                string storedUtc = EditorPrefs.GetString(
+                    GetProjectScopedPrefKey(EditorPrefKeys.LastLocalHttpServerStartedUtc),
+                    string.Empty);
 
                 if (storedPid <= 0 || storedPort != expectedPort)
                 {
@@ -217,7 +233,9 @@ namespace MCPForUnity.Editor.Services.Server
         {
             try
             {
-                return EditorPrefs.GetString(EditorPrefKeys.LastLocalHttpServerPidArgsHash, string.Empty);
+                return EditorPrefs.GetString(
+                    GetProjectScopedPrefKey(EditorPrefKeys.LastLocalHttpServerPidArgsHash),
+                    string.Empty);
             }
             catch
             {
@@ -228,12 +246,17 @@ namespace MCPForUnity.Editor.Services.Server
         /// <inheritdoc/>
         public void ClearTracking()
         {
-            try { EditorPrefs.DeleteKey(EditorPrefKeys.LastLocalHttpServerPid); } catch { }
-            try { EditorPrefs.DeleteKey(EditorPrefKeys.LastLocalHttpServerPort); } catch { }
-            try { EditorPrefs.DeleteKey(EditorPrefKeys.LastLocalHttpServerStartedUtc); } catch { }
-            try { EditorPrefs.DeleteKey(EditorPrefKeys.LastLocalHttpServerPidArgsHash); } catch { }
-            try { EditorPrefs.DeleteKey(EditorPrefKeys.LastLocalHttpServerPidFilePath); } catch { }
-            try { EditorPrefs.DeleteKey(EditorPrefKeys.LastLocalHttpServerInstanceToken); } catch { }
+            try { EditorPrefs.DeleteKey(GetProjectScopedPrefKey(EditorPrefKeys.LastLocalHttpServerPid)); } catch { }
+            try { EditorPrefs.DeleteKey(GetProjectScopedPrefKey(EditorPrefKeys.LastLocalHttpServerPort)); } catch { }
+            try { EditorPrefs.DeleteKey(GetProjectScopedPrefKey(EditorPrefKeys.LastLocalHttpServerStartedUtc)); } catch { }
+            try { EditorPrefs.DeleteKey(GetProjectScopedPrefKey(EditorPrefKeys.LastLocalHttpServerPidArgsHash)); } catch { }
+            try { EditorPrefs.DeleteKey(GetProjectScopedPrefKey(EditorPrefKeys.LastLocalHttpServerPidFilePath)); } catch { }
+            try { EditorPrefs.DeleteKey(GetProjectScopedPrefKey(EditorPrefKeys.LastLocalHttpServerInstanceToken)); } catch { }
+        }
+
+        internal static string GetProjectScopedPrefKey(string key)
+        {
+            return $"{key}_{ProjectIdentityUtility.GetProjectHash()}";
         }
 
         /// <inheritdoc/>

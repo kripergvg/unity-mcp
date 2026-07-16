@@ -1,3 +1,5 @@
+using System;
+using System.IO;
 using NUnit.Framework;
 using MCPForUnity.Editor.Services;
 using MCPForUnity.Editor.Services.Server;
@@ -16,15 +18,25 @@ namespace MCPForUnityTests.Editor.Services.Server
         private ServerCommandBuilder _builder;
         private bool _savedUseHttpTransport;
         private string _savedHttpUrl;
+        private string _savedGitUrlOverride;
         private StringEditorPrefSnapshot _projectHttpUrl;
+        private string _projectConfigPath;
 
         [SetUp]
         public void SetUp()
         {
+            _projectConfigPath = Path.Combine(
+                Path.GetTempPath(),
+                $"MCPForUnityProject-{Guid.NewGuid():N}.json");
+            ProjectIsolationConfiguration.SetConfigPathForTests(_projectConfigPath);
+
             _builder = new ServerCommandBuilder();
             // Save current settings
             _savedUseHttpTransport = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
             _savedHttpUrl = EditorPrefs.GetString(EditorPrefKeys.HttpBaseUrl, string.Empty);
+            _savedGitUrlOverride = EditorPrefs.GetString(
+                EditorPrefKeys.GitUrlOverride,
+                string.Empty);
             _projectHttpUrl = StringEditorPrefSnapshot.Capture(
                 HttpEndpointUtility.GetProjectScopedPrefKey(EditorPrefKeys.HttpBaseUrl));
             EditorPrefs.DeleteKey(_projectHttpUrl.Key);
@@ -33,6 +45,10 @@ namespace MCPForUnityTests.Editor.Services.Server
         [TearDown]
         public void TearDown()
         {
+            if (File.Exists(_projectConfigPath))
+                File.Delete(_projectConfigPath);
+            ProjectIsolationConfiguration.ResetForTests();
+
             // Restore settings
             EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, _savedUseHttpTransport);
             if (!string.IsNullOrEmpty(_savedHttpUrl))
@@ -43,6 +59,7 @@ namespace MCPForUnityTests.Editor.Services.Server
             {
                 EditorPrefs.DeleteKey(EditorPrefKeys.HttpBaseUrl);
             }
+            EditorPrefs.SetString(EditorPrefKeys.GitUrlOverride, _savedGitUrlOverride);
             _projectHttpUrl.Restore();
             // Refresh cache to reflect restored values
             EditorConfigurationCache.Instance.Refresh();
@@ -297,6 +314,39 @@ namespace MCPForUnityTests.Editor.Services.Server
             {
                 _builder.TryBuildCommand(out _, out _, out _, out _);
             });
+        }
+
+        [Test]
+        public void TryBuildCommand_ProjectIsolationAddsExpectedProjectFlags()
+        {
+            File.WriteAllText(_projectConfigPath,
+                "{\"schemaVersion\":1,\"httpPort\":18127," +
+                "\"serverSource\":\"git+https://example.invalid/unity-mcp.git@abc#subdirectory=Server\"}");
+            ProjectIsolationConfiguration.SetConfigPathForTests(_projectConfigPath);
+            EditorPrefs.SetString(
+                EditorPrefKeys.GitUrlOverride,
+                "git+https://wrong.invalid/unity-mcp.git@wrong#subdirectory=Server");
+            EditorConfigurationCache.Instance.Refresh();
+
+            bool result = _builder.TryBuildCommand(
+                out _,
+                out string arguments,
+                out _,
+                out string error);
+
+            if (!result && error != null
+                && error.Contains("uv", StringComparison.OrdinalIgnoreCase))
+            {
+                Assert.Ignore(error);
+            }
+
+            Assert.IsTrue(result, error);
+            Assert.That(arguments, Does.Contain("--http-url http://127.0.0.1:18127"));
+            Assert.That(arguments, Does.Contain("--project-isolated"));
+            Assert.That(arguments, Does.Contain(
+                "--from \"git+https://example.invalid/unity-mcp.git@abc#subdirectory=Server\""));
+            Assert.That(arguments, Does.Contain(
+                $"--expected-project-hash {ProjectIdentityUtility.GetProjectHash()}"));
         }
 
         #endregion

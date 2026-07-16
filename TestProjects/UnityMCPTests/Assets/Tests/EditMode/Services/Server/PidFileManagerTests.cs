@@ -38,12 +38,12 @@ namespace MCPForUnityTests.Editor.Services.Server
 
         private void ClearTestEditorPrefs()
         {
-            try { EditorPrefs.DeleteKey(EditorPrefKeys.LastLocalHttpServerPid); } catch { }
-            try { EditorPrefs.DeleteKey(EditorPrefKeys.LastLocalHttpServerPort); } catch { }
-            try { EditorPrefs.DeleteKey(EditorPrefKeys.LastLocalHttpServerStartedUtc); } catch { }
-            try { EditorPrefs.DeleteKey(EditorPrefKeys.LastLocalHttpServerPidArgsHash); } catch { }
-            try { EditorPrefs.DeleteKey(EditorPrefKeys.LastLocalHttpServerPidFilePath); } catch { }
-            try { EditorPrefs.DeleteKey(EditorPrefKeys.LastLocalHttpServerInstanceToken); } catch { }
+            try { EditorPrefs.DeleteKey(PidFileManager.GetProjectScopedPrefKey(EditorPrefKeys.LastLocalHttpServerPid)); } catch { }
+            try { EditorPrefs.DeleteKey(PidFileManager.GetProjectScopedPrefKey(EditorPrefKeys.LastLocalHttpServerPort)); } catch { }
+            try { EditorPrefs.DeleteKey(PidFileManager.GetProjectScopedPrefKey(EditorPrefKeys.LastLocalHttpServerStartedUtc)); } catch { }
+            try { EditorPrefs.DeleteKey(PidFileManager.GetProjectScopedPrefKey(EditorPrefKeys.LastLocalHttpServerPidArgsHash)); } catch { }
+            try { EditorPrefs.DeleteKey(PidFileManager.GetProjectScopedPrefKey(EditorPrefKeys.LastLocalHttpServerPidFilePath)); } catch { }
+            try { EditorPrefs.DeleteKey(PidFileManager.GetProjectScopedPrefKey(EditorPrefKeys.LastLocalHttpServerInstanceToken)); } catch { }
         }
 
         #region GetPidFilePath Tests
@@ -310,6 +310,20 @@ namespace MCPForUnityTests.Editor.Services.Server
             // Assert
             Assert.IsTrue(result);
             Assert.AreEqual(pid, storedPid);
+        }
+
+        [Test]
+        public void StoreTracking_DoesNotChangeLegacyGlobalKeys()
+        {
+            int originalPid = EditorPrefs.GetInt(EditorPrefKeys.LastLocalHttpServerPid, 0);
+            int originalPort = EditorPrefs.GetInt(EditorPrefKeys.LastLocalHttpServerPort, 0);
+
+            _manager.StoreTracking(12345, 18126);
+
+            Assert.AreEqual(originalPid,
+                EditorPrefs.GetInt(EditorPrefKeys.LastLocalHttpServerPid, 0));
+            Assert.AreEqual(originalPort,
+                EditorPrefs.GetInt(EditorPrefKeys.LastLocalHttpServerPort, 0));
         }
 
         [Test]

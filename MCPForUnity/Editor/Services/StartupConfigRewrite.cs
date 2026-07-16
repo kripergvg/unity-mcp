@@ -35,6 +35,7 @@ namespace MCPForUnity.Editor.Services
             if (SessionState.GetBool(SESSION_GUARD_KEY, false)) return;
             SessionState.SetBool(SESSION_GUARD_KEY, true);
 
+            if (ProjectIsolationConfiguration.IsEnabled) return;
             if (!EditorPrefs.GetBool(EditorPrefKeys.AutoRegisterEnabled, true)) return;
 
             int rewrote = 0;

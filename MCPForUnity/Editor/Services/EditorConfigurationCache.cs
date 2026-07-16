@@ -117,6 +117,7 @@ namespace MCPForUnity.Editor.Services
         /// Default: 0 (auto-assign)
         /// </summary>
         public int UnitySocketPort => _unitySocketPort;
+        public bool IsProjectIsolationEnabled => ProjectIsolationConfiguration.IsEnabled;
 
         private EditorConfigurationCache()
         {
@@ -129,7 +130,8 @@ namespace MCPForUnity.Editor.Services
         /// </summary>
         public void Refresh()
         {
-            _useHttpTransport = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
+            bool isolated = ProjectIsolationConfiguration.IsEnabled;
+            _useHttpTransport = isolated || EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
             _debugLogs = EditorPrefs.GetBool(EditorPrefKeys.DebugLogs, false);
             _devModeForceServerRefresh = EditorPrefs.GetBool(EditorPrefKeys.DevModeForceServerRefresh, false);
             _uvxPathOverride = EditorPrefs.GetString(EditorPrefKeys.UvxPathOverride, string.Empty);
@@ -137,7 +139,9 @@ namespace MCPForUnity.Editor.Services
             _httpBaseUrl = HttpEndpointUtility.GetLocalBaseUrl();
             _httpRemoteBaseUrl = HttpEndpointUtility.GetRemoteBaseUrl();
             _claudeCliPathOverride = EditorPrefs.GetString(EditorPrefKeys.ClaudeCliPathOverride, string.Empty);
-            _httpTransportScope = EditorPrefs.GetString(EditorPrefKeys.HttpTransportScope, string.Empty);
+            _httpTransportScope = isolated
+                ? "local"
+                : EditorPrefs.GetString(EditorPrefKeys.HttpTransportScope, string.Empty);
             _unitySocketPort = EditorPrefs.GetInt(EditorPrefKeys.UnitySocketPort, 0);
         }
 
@@ -146,6 +150,10 @@ namespace MCPForUnity.Editor.Services
         /// </summary>
         public void SetUseHttpTransport(bool value)
         {
+            if (ProjectIsolationConfiguration.IsEnabled && !value)
+                throw new InvalidOperationException(
+                    $"HTTP Local transport is controlled by {ProjectIsolationConfiguration.ConfigPath}.");
+
             if (_useHttpTransport != value)
             {
                 _useHttpTransport = value;
@@ -256,6 +264,13 @@ namespace MCPForUnity.Editor.Services
         public void SetHttpTransportScope(string value)
         {
             value = value ?? string.Empty;
+            if (ProjectIsolationConfiguration.IsEnabled
+                && !string.Equals(value, "local", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    $"HTTP Local transport is controlled by {ProjectIsolationConfiguration.ConfigPath}.");
+            }
+
             if (_httpTransportScope != value)
             {
                 _httpTransportScope = value;
@@ -286,7 +301,8 @@ namespace MCPForUnity.Editor.Services
             switch (keyName)
             {
                 case nameof(UseHttpTransport):
-                    _useHttpTransport = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
+                    _useHttpTransport = ProjectIsolationConfiguration.IsEnabled
+                        || EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
                     break;
                 case nameof(DebugLogs):
                     _debugLogs = EditorPrefs.GetBool(EditorPrefKeys.DebugLogs, false);
@@ -310,7 +326,9 @@ namespace MCPForUnity.Editor.Services
                     _claudeCliPathOverride = EditorPrefs.GetString(EditorPrefKeys.ClaudeCliPathOverride, string.Empty);
                     break;
                 case nameof(HttpTransportScope):
-                    _httpTransportScope = EditorPrefs.GetString(EditorPrefKeys.HttpTransportScope, string.Empty);
+                    _httpTransportScope = ProjectIsolationConfiguration.IsEnabled
+                        ? "local"
+                        : EditorPrefs.GetString(EditorPrefKeys.HttpTransportScope, string.Empty);
                     break;
                 case nameof(UnitySocketPort):
                     _unitySocketPort = EditorPrefs.GetInt(EditorPrefKeys.UnitySocketPort, 0);

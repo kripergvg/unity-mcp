@@ -19,6 +19,7 @@ from starlette.routing import WebSocketRoute
 from starlette.responses import JSONResponse
 import argparse
 import asyncio
+import re
 
 # Fix to IPV4 Connection Issue #853
 # Will disable features in ProactorEventLoop including subprocess pipes and named pipes
@@ -661,6 +662,8 @@ Environment Variables:
   UNITY_MCP_HTTP_URL   HTTP server URL (default: http://127.0.0.1:8080)
   UNITY_MCP_HTTP_HOST   HTTP server host (overrides URL host)
   UNITY_MCP_HTTP_PORT   HTTP server port (overrides URL port)
+  UNITY_MCP_PROJECT_ISOLATED   Restrict this server to one expected Unity project
+  UNITY_MCP_EXPECTED_PROJECT_HASH   Expected Unity project path hash
 
 Examples:
   # Use specific Unity project as default
@@ -785,6 +788,20 @@ Examples:
         help="Keep custom tools scoped to the active Unity project and enable the custom tools resource. "
              "Can also set via UNITY_MCP_PROJECT_SCOPED_TOOLS=true."
     )
+    parser.add_argument(
+        "--project-isolated",
+        action="store_true",
+        help="Restrict this local HTTP server to one Unity project. "
+             "Can also set via UNITY_MCP_PROJECT_ISOLATED=true."
+    )
+    parser.add_argument(
+        "--expected-project-hash",
+        type=str,
+        default=None,
+        metavar="HASH",
+        help="Expected 16-character Unity project path hash. Required with "
+             "--project-isolated. Can also set via UNITY_MCP_EXPECTED_PROJECT_HASH."
+    )
 
     args = parser.parse_args()
 
@@ -798,6 +815,31 @@ Examples:
     config.transport_mode = args.transport or os.environ.get(
         "UNITY_MCP_TRANSPORT", "stdio")
     logger.info(f"Transport mode: {config.transport_mode}")
+
+    config.project_isolated = (
+        bool(args.project_isolated)
+        or os.environ.get("UNITY_MCP_PROJECT_ISOLATED", "").lower()
+        in ("true", "1", "yes", "on")
+    )
+    config.expected_project_hash = (
+        args.expected_project_hash
+        or os.environ.get("UNITY_MCP_EXPECTED_PROJECT_HASH")
+    )
+
+    if config.project_isolated:
+        if config.transport_mode != "http":
+            logger.error("--project-isolated requires HTTP transport")
+            raise SystemExit(1)
+        if not config.expected_project_hash:
+            logger.error(
+                "--project-isolated requires --expected-project-hash or "
+                "UNITY_MCP_EXPECTED_PROJECT_HASH")
+            raise SystemExit(1)
+        config.expected_project_hash = config.expected_project_hash.lower()
+        if not re.fullmatch(r"[0-9a-f]{16}", config.expected_project_hash):
+            logger.error(
+                "--expected-project-hash must be exactly 16 hexadecimal characters")
+            raise SystemExit(1)
 
     config.http_remote_hosted = (
         bool(args.http_remote_hosted)

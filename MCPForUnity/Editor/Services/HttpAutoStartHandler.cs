@@ -31,10 +31,15 @@ namespace MCPForUnity.Editor.Services
                 return;
             }
 
-            // Only check lightweight EditorPrefs here — services like EditorConfigurationCache
-            // and MCPServiceLocator may not be initialized yet on fresh editor launch.
-            bool autoStartEnabled = EditorPrefs.GetBool(EditorPrefKeys.AutoStartOnLoad, false);
-            if (!autoStartEnabled) return;
+            try
+            {
+                if (!IsAutoStartEnabled()) return;
+            }
+            catch (Exception ex)
+            {
+                McpLog.Error($"[HTTP Auto-Start] Invalid project configuration: {ex.Message}");
+                return;
+            }
 
             SessionState.SetBool(SessionInitKey, true);
 
@@ -46,8 +51,7 @@ namespace MCPForUnity.Editor.Services
         {
             try
             {
-                bool autoStartEnabled = EditorPrefs.GetBool(EditorPrefKeys.AutoStartOnLoad, false);
-                if (!autoStartEnabled) return;
+                if (!IsAutoStartEnabled()) return;
 
                 bool useHttp = EditorConfigurationCache.Instance.UseHttpTransport;
                 if (!useHttp) return;
@@ -123,7 +127,7 @@ namespace MCPForUnity.Editor.Services
             while (true)
             {
                 // Abort if user changed settings while we were waiting.
-                if (!EditorPrefs.GetBool(EditorPrefKeys.AutoStartOnLoad, false)) return;
+                if (!IsAutoStartEnabled()) return;
                 if (!EditorConfigurationCache.Instance.UseHttpTransport) return;
                 if (MCPServiceLocator.TransportManager.IsRunning(TransportMode.Http)) return;
 
@@ -178,6 +182,12 @@ namespace MCPForUnity.Editor.Services
             {
                 McpLog.Warn("Connection failed: could not connect to remote HTTP server");
             }
+        }
+
+        private static bool IsAutoStartEnabled()
+        {
+            return ProjectIsolationConfiguration.IsEnabled
+                || EditorPrefs.GetBool(EditorPrefKeys.AutoStartOnLoad, false);
         }
     }
 }

@@ -53,6 +53,10 @@ namespace MCPForUnity.Editor.Helpers
         /// </summary>
         public static string GetLocalBaseUrl()
         {
+            ProjectIsolationConfiguration isolated = ProjectIsolationConfiguration.Current;
+            if (isolated != null)
+                return isolated.HttpBaseUrl;
+
             string stored = GetProjectScopedString(LocalPrefKey, DefaultLocalBaseUrl);
             return NormalizeBaseUrl(stored, DefaultLocalBaseUrl, remoteScope: false);
         }
@@ -63,6 +67,16 @@ namespace MCPForUnity.Editor.Helpers
         public static void SaveLocalBaseUrl(string userValue)
         {
             string normalized = NormalizeBaseUrl(userValue, DefaultLocalBaseUrl, remoteScope: false);
+
+            ProjectIsolationConfiguration isolated = ProjectIsolationConfiguration.Current;
+            if (isolated != null)
+            {
+                if (!string.Equals(normalized, isolated.HttpBaseUrl, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException(
+                        $"HTTP Local URL is controlled by {ProjectIsolationConfiguration.ConfigPath}.");
+                return;
+            }
+
             EditorPrefs.SetString(GetProjectScopedPrefKey(LocalPrefKey), normalized);
         }
 
@@ -150,6 +164,9 @@ namespace MCPForUnity.Editor.Helpers
         /// </summary>
         public static bool IsRemoteScope()
         {
+            if (ProjectIsolationConfiguration.IsEnabled)
+                return false;
+
             string scope = EditorConfigurationCache.Instance.HttpTransportScope;
             return string.Equals(scope, "remote", StringComparison.OrdinalIgnoreCase);
         }

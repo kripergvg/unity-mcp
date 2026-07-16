@@ -52,13 +52,19 @@ namespace MCPForUnity.Editor.Services.Server
                 true
             );
             string scopedFlag = projectScopedTools ? " --project-scoped-tools" : string.Empty;
+            string isolationFlags = string.Empty;
+            if (ProjectIsolationConfiguration.IsEnabled)
+            {
+                isolationFlags =
+                    $" --project-isolated --expected-project-hash {ProjectIdentityUtility.GetProjectHash()}";
+            }
 
             // Use centralized helper for beta server / prerelease args
             string fromArgs = AssetPathUtility.GetBetaServerFromArgs(quoteFromPath: true);
 
             string args = string.IsNullOrEmpty(fromArgs)
-                ? $"{devFlags}{packageName} --transport http --http-url {httpUrl}{scopedFlag}"
-                : $"{devFlags}{fromArgs} {packageName} --transport http --http-url {httpUrl}{scopedFlag}";
+                ? $"{devFlags}{packageName} --transport http --http-url {httpUrl}{scopedFlag}{isolationFlags}"
+                : $"{devFlags}{fromArgs} {packageName} --transport http --http-url {httpUrl}{scopedFlag}{isolationFlags}";
 
             fileName = uvxPath;
             arguments = args;

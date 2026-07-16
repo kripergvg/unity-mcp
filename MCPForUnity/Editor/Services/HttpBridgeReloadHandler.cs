@@ -39,11 +39,11 @@ namespace MCPForUnity.Editor.Services
 
                 if (shouldResume)
                 {
-                    EditorPrefs.SetBool(EditorPrefKeys.ResumeHttpAfterReload, true);
+                    EditorPrefs.SetBool(GetResumePrefKey(), true);
                 }
                 else
                 {
-                    EditorPrefs.DeleteKey(EditorPrefKeys.ResumeHttpAfterReload);
+                    EditorPrefs.DeleteKey(GetResumePrefKey());
                 }
 
                 if (shouldResume)
@@ -66,10 +66,18 @@ namespace MCPForUnity.Editor.Services
             {
                 // Only resume HTTP if it is still the selected transport.
                 bool useHttp = EditorConfigurationCache.Instance.UseHttpTransport;
-                resume = useHttp && EditorPrefs.GetBool(EditorPrefKeys.ResumeHttpAfterReload, false);
+                string resumeKey = GetResumePrefKey();
+                bool hasProjectScopedFlag = EditorPrefs.HasKey(resumeKey);
+                bool storedResume = hasProjectScopedFlag
+                    ? EditorPrefs.GetBool(resumeKey, false)
+                    : !ProjectIsolationConfiguration.IsEnabled
+                        && EditorPrefs.GetBool(EditorPrefKeys.ResumeHttpAfterReload, false);
+                resume = useHttp && storedResume;
                 if (resume)
                 {
-                    EditorPrefs.DeleteKey(EditorPrefKeys.ResumeHttpAfterReload);
+                    EditorPrefs.DeleteKey(resumeKey);
+                    if (!hasProjectScopedFlag)
+                        EditorPrefs.DeleteKey(EditorPrefKeys.ResumeHttpAfterReload);
                 }
             }
             catch (Exception ex)
@@ -158,6 +166,11 @@ namespace MCPForUnity.Editor.Services
             {
                 McpLog.Warn("Failed to resume HTTP MCP bridge after domain reload");
             }
+        }
+
+        private static string GetResumePrefKey()
+        {
+            return $"{EditorPrefKeys.ResumeHttpAfterReload}_{ProjectIdentityUtility.GetProjectHash()}";
         }
     }
 }
