@@ -39,6 +39,28 @@ namespace MCPForUnity.Editor.Services.Server
                 return false;
             }
 
+            if (ProjectIsolationConfiguration.IsEnabled)
+            {
+                string serverExecutable = ProjectIsolationConfiguration.Current.ServerExecutable;
+                if (!string.IsNullOrWhiteSpace(serverExecutable))
+                {
+                    bool pinnedProjectScopedTools = EditorPrefs.GetBool(
+                        EditorPrefKeys.ProjectScopedToolsLocalHttp,
+                        true);
+                    string pinnedScopedFlag =
+                        pinnedProjectScopedTools ? " --project-scoped-tools" : string.Empty;
+                    string pinnedIsolationFlags =
+                        $" --project-isolated --expected-project-hash {ProjectIdentityUtility.GetProjectHash()}";
+                    string pinnedArguments =
+                        $"--transport http --http-url {httpUrl}{pinnedScopedFlag}{pinnedIsolationFlags}";
+
+                    fileName = serverExecutable;
+                    arguments = pinnedArguments;
+                    displayCommand = $"{QuoteIfNeeded(serverExecutable)} {pinnedArguments}";
+                    return true;
+                }
+            }
+
             var (uvxPath, fromUrl, packageName) = AssetPathUtility.GetUvxCommandParts();
             if (string.IsNullOrEmpty(uvxPath))
             {

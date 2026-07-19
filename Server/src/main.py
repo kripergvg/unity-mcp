@@ -101,7 +101,7 @@ try:
     _fh.setLevel(getattr(logging, config.log_level))
     logger.addHandler(_fh)
     logger.propagate = False  # Prevent double logging to root logger
-    # Add file handler to root logger so __name__-based loggers (e.g. utils.focus_nudge,
+    # Add file handler to root logger so __name__-based loggers (e.g.
     # services.tools.run_tests) also write to the log file. Named loggers with
     # propagate=False won't double-log.
     logging.getLogger().addHandler(_fh)

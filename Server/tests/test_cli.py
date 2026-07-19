@@ -149,6 +149,16 @@ class TestOutputFormatting:
         result = format_as_text(data)
         assert "2 items" in result
 
+    def test_format_as_text_diagnostics_are_not_truncated(self):
+        message = "compiler diagnostic " + ("x" * 200)
+        stack_trace = "stack line 1\nstack line 2"
+        result = format_as_text([{
+            "message": message,
+            "stackTrace": stack_trace,
+        }])
+        assert message in result
+        assert stack_trace.replace("\n", "\\n") in result
+
     def test_format_as_table(self):
         """Test table formatting."""
         data = [
@@ -596,10 +606,38 @@ class TestEditorCommands:
 
     def test_editor_tests(self, runner, mock_unity_response):
         """Test editor tests command."""
-        with patch("cli.commands.editor.run_command", return_value=mock_unity_response):
+        started = {
+            "success": True,
+            "data": {"job_id": "job-1", "status": "running"},
+        }
+        completed = {
+            "success": True,
+            "data": {
+                "job_id": "job-1",
+                "status": "succeeded",
+                "result": {"summary": {"total": 1, "passed": 1, "failed": 0}},
+            },
+        }
+        with patch(
+            "cli.commands.editor.run_command",
+            side_effect=[started, completed],
+        ) as run:
             result = runner.invoke(
-                cli, ["editor", "tests", "--mode", "EditMode"])
+                cli, [
+                    "editor", "tests",
+                    "--mode", "EditMode",
+                    "--test", "Example.Tests.One",
+                    "--group", "Example.Tests.*",
+                    "--category", "Smoke",
+                    "--assembly", "Example.Tests",
+                ])
             assert result.exit_code == 0
+            params = run.call_args_list[0].args[1]
+            assert params["test_names"] == ["Example.Tests.One"]
+            assert params["group_names"] == ["Example.Tests.*"]
+            assert params["category_names"] == ["Smoke"]
+            assert params["assembly_names"] == ["Example.Tests"]
+            assert run.call_args_list[1].args[0] == "get_test_job"
 
 
 # =============================================================================
@@ -1330,6 +1368,20 @@ class TestEditorEnhancedCommands:
             assert result.exit_code == 0
             assert "test-job-123" in result.output
 
+    def test_editor_tests_failed_returns_nonzero(self, runner):
+        failed_response = {
+            "success": True,
+            "data": {
+                "job_id": "test-job-123",
+                "status": "failed",
+                "result": {"summary": {"total": 1, "passed": 0, "failed": 1}},
+            },
+        }
+        with patch("cli.commands.editor.run_command", return_value=failed_response):
+            result = runner.invoke(cli, ["editor", "tests", "--test", "Example.Tests.Fails"])
+            assert result.exit_code != 0
+            assert "Unity tests failed" in result.output
+
     def test_editor_poll_test(self, runner):
         """Test polling test job."""
         poll_response = {
@@ -1344,6 +1396,27 @@ class TestEditorEnhancedCommands:
             result = runner.invoke(
                 cli, ["editor", "poll-test", "test-job-123"])
             assert result.exit_code == 0
+
+
+def test_build_run_waits_for_terminal_job(runner):
+    responses = [
+        {
+            "success": True,
+            "data": {"job_id": "build-123", "result": "pending"},
+        },
+        {
+            "success": True,
+            "data": {"job_id": "build-123", "result": "succeeded"},
+        },
+    ]
+    with patch("cli.commands.build.run_command", side_effect=responses):
+        result = runner.invoke(
+            cli,
+            ["build", "run", "--target", "windows64", "--wait", "5"],
+        )
+
+    assert result.exit_code == 0
+    assert "Build completed successfully" in result.output
 
 
 # =============================================================================

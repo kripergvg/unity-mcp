@@ -21,6 +21,8 @@ namespace MCPForUnity.Editor.Services
     {
         public string FullName { get; set; }
         public string Message { get; set; }
+        public string StackTrace { get; set; }
+        public string Output { get; set; }
     }
 
     internal sealed class TestJob
@@ -432,7 +434,12 @@ namespace MCPForUnity.Editor.Services
             PersistToSessionState();
         }
 
-        public static void OnLeafTestFinished(string testFullName, bool isFailure, string message)
+        public static void OnLeafTestFinished(
+            string testFullName,
+            bool isFailure,
+            string message,
+            string stackTrace,
+            string output)
         {
             long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             lock (LockObj)
@@ -455,7 +462,9 @@ namespace MCPForUnity.Editor.Services
                         job.FailuresSoFar.Add(new TestJobFailure
                         {
                             FullName = testFullName,
-                            Message = string.IsNullOrWhiteSpace(message) ? "Test failed" : message
+                            Message = string.IsNullOrWhiteSpace(message) ? "Test failed" : message,
+                            StackTrace = stackTrace,
+                            Output = output
                         });
                     }
                 }
@@ -539,7 +548,8 @@ namespace MCPForUnity.Editor.Services
             }
 
             object resultPayload = null;
-            if (job.Status == TestJobStatus.Succeeded && job.Result != null)
+            if ((job.Status == TestJobStatus.Succeeded || job.Status == TestJobStatus.Failed) &&
+                job.Result != null)
             {
                 resultPayload = job.Result.ToSerializable(job.Mode, includeDetails, includeFailedTests);
             }
@@ -629,7 +639,13 @@ namespace MCPForUnity.Editor.Services
             for (int i = 0; i < failures.Count; i++)
             {
                 var f = failures[i];
-                list[i] = new { full_name = f?.FullName, message = f?.Message };
+                list[i] = new
+                {
+                    full_name = f?.FullName,
+                    message = f?.Message,
+                    stack_trace = f?.StackTrace,
+                    output = f?.Output
+                };
             }
             return list;
         }
@@ -685,4 +701,3 @@ namespace MCPForUnity.Editor.Services
         }
     }
 }
-

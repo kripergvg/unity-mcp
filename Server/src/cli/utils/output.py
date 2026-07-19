@@ -79,6 +79,11 @@ def format_as_text(data: Any, indent: int = 0) -> str:
     if isinstance(data, list):
         if not data:
             return f"{prefix}(empty list)"
+        if all(_is_diagnostic_item(item) for item in data):
+            lines = [f"{prefix}[{len(data)} items]"]
+            for i, item in enumerate(data):
+                lines.append(f"{prefix}  [{i}] {_format_list_item(item)}")
+            return "\n".join(lines)
         lines = [f"{prefix}[{len(data)} items]"]
         for i, item in enumerate(data[:20]):
             lines.append(f"{prefix}  [{i}] {_format_list_item(item)}")
@@ -92,6 +97,8 @@ def format_as_text(data: Any, indent: int = 0) -> str:
 def _format_list_item(item: Any) -> str:
     """Format a single list item."""
     if isinstance(item, dict):
+        if _is_diagnostic_item(item):
+            return json.dumps(item, default=str, ensure_ascii=False)
         # Try to find a name/id field for display
         name = item.get("name") or item.get(
             "Name") or item.get("id") or item.get("Id")
@@ -105,6 +112,13 @@ def _format_list_item(item: Any) -> str:
         # Fallback to compact representation
         return json.dumps(item, default=str)[:80]
     return str(item)[:80]
+
+
+def _is_diagnostic_item(item: Any) -> bool:
+    return isinstance(item, dict) and any(
+        key in item
+        for key in ("message", "stackTrace", "stack_trace", "output")
+    )
 
 
 def format_as_table(data: Any) -> str:

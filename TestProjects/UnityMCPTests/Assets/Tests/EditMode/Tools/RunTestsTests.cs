@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Reflection;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
@@ -60,6 +61,77 @@ namespace MCPForUnityTests.Editor.Tools
             var err = (ErrorResponse)resultObj;
             Assert.AreEqual(false, err.Success);
             Assert.IsTrue(err.Error.Contains("Unknown test mode", StringComparison.OrdinalIgnoreCase));
+        }
+
+        [Test]
+        public void FailedJobSerializationIncludesFullResultAndDiagnostics()
+        {
+            var asm = typeof(MCPForUnity.Editor.Services.MCPServiceLocator).Assembly;
+            var summaryType = asm.GetType("MCPForUnity.Editor.Services.TestRunSummary");
+            var testResultType = asm.GetType("MCPForUnity.Editor.Services.TestRunTestResult");
+            var runResultType = asm.GetType("MCPForUnity.Editor.Services.TestRunResult");
+            var jobType = asm.GetType("MCPForUnity.Editor.Services.TestJob");
+            var statusType = asm.GetType("MCPForUnity.Editor.Services.TestJobStatus");
+            var managerType = asm.GetType("MCPForUnity.Editor.Services.TestJobManager");
+
+            Assert.NotNull(summaryType);
+            Assert.NotNull(testResultType);
+            Assert.NotNull(runResultType);
+            Assert.NotNull(jobType);
+            Assert.NotNull(statusType);
+            Assert.NotNull(managerType);
+
+            var summary = Activator.CreateInstance(
+                summaryType,
+                BindingFlags.Instance | BindingFlags.NonPublic,
+                null,
+                new object[] { 1, 0, 1, 0, 0.25, "Failed" },
+                null);
+            var testResult = Activator.CreateInstance(
+                testResultType,
+                BindingFlags.Instance | BindingFlags.NonPublic,
+                null,
+                new object[]
+                {
+                    "Fails",
+                    "Example.Tests.Fails",
+                    "Failed",
+                    0.25,
+                    "complete failure message",
+                    "complete stack trace",
+                    "complete captured output"
+                },
+                null);
+            var resultList = (IList)Activator.CreateInstance(typeof(System.Collections.Generic.List<>).MakeGenericType(testResultType));
+            resultList.Add(testResult);
+            var runResult = Activator.CreateInstance(
+                runResultType,
+                BindingFlags.Instance | BindingFlags.NonPublic,
+                null,
+                new[] { summary, resultList },
+                null);
+            var job = Activator.CreateInstance(jobType);
+            jobType.GetProperty("JobId").SetValue(job, "job-1");
+            jobType.GetProperty("Status").SetValue(job, Enum.Parse(statusType, "Failed"));
+            jobType.GetProperty("Mode").SetValue(job, "EditMode");
+            jobType.GetProperty("Result").SetValue(job, runResult);
+
+            var serializer = managerType.GetMethod(
+                "ToSerializable",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            var payload = JObject.FromObject(serializer.Invoke(null, new[] { job, false, true }));
+
+            Assert.AreEqual("failed", payload["status"]?.ToString());
+            Assert.AreEqual(1, payload["result"]?["summary"]?["failed"]?.Value<int>());
+            Assert.AreEqual(
+                "complete failure message",
+                payload["result"]?["results"]?[0]?["message"]?.ToString());
+            Assert.AreEqual(
+                "complete stack trace",
+                payload["result"]?["results"]?[0]?["stackTrace"]?.ToString());
+            Assert.AreEqual(
+                "complete captured output",
+                payload["result"]?["results"]?[0]?["output"]?.ToString());
         }
     }
 }

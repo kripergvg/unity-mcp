@@ -349,6 +349,42 @@ namespace MCPForUnityTests.Editor.Services.Server
                 $"--expected-project-hash {ProjectIdentityUtility.GetProjectHash()}"));
         }
 
+        [Test]
+        public void TryBuildCommand_ProjectIsolationUsesPinnedExecutable()
+        {
+            var executable = Path.Combine(
+                Path.GetTempPath(),
+                $"unity-mcp-{Guid.NewGuid():N}.exe");
+            File.WriteAllText(executable, string.Empty);
+            try
+            {
+                File.WriteAllText(
+                    _projectConfigPath,
+                    "{\"schemaVersion\":1,\"httpPort\":18127," +
+                    "\"serverSource\":\"C:\\\\pinned-server\"," +
+                    $"\"serverExecutable\":{Newtonsoft.Json.JsonConvert.SerializeObject(executable)}}}");
+                ProjectIsolationConfiguration.SetConfigPathForTests(_projectConfigPath);
+                EditorConfigurationCache.Instance.Refresh();
+
+                var result = _builder.TryBuildCommand(
+                    out var fileName,
+                    out var arguments,
+                    out var displayCommand,
+                    out var error);
+
+                Assert.IsTrue(result, error);
+                Assert.AreEqual(executable, fileName);
+                Assert.That(arguments, Does.Contain("--http-url http://127.0.0.1:18127"));
+                Assert.That(arguments, Does.Contain("--project-isolated"));
+                Assert.That(arguments, Does.Not.Contain("uvx"));
+                Assert.That(displayCommand, Does.StartWith(_builder.QuoteIfNeeded(executable)));
+            }
+            finally
+            {
+                File.Delete(executable);
+            }
+        }
+
         #endregion
 
         #region Interface Implementation Tests

@@ -1,10 +1,11 @@
 """Build management CLI commands."""
 
+import time
 import click
 from typing import Optional
 
 from cli.utils.config import get_config
-from cli.utils.output import format_output, print_info
+from cli.utils.output import format_output, print_error, print_info, print_success
 from cli.utils.connection import run_command, handle_unity_errors
 
 
@@ -12,6 +13,34 @@ from cli.utils.connection import run_command, handle_unity_errors
 def build():
     """Build management - player builds, platforms, settings, batch."""
     pass
+
+
+def _wait_for_build(job_id: str, timeout: int):
+    config = get_config()
+    deadline = time.monotonic() + timeout
+    poll_interval = 0.5
+    previous_result = None
+
+    while True:
+        result = run_command("manage_build", {"action": "status", "job_id": job_id}, config)
+        if not result.get("success"):
+            return result
+
+        data = result.get("data") or {}
+        state = data.get("result")
+        if state in ("succeeded", "failed", "cancelled", "skipped"):
+            return result
+
+        if time.monotonic() >= deadline:
+            return {
+                "success": False,
+                "error": f"Build {job_id} did not finish within {timeout} seconds",
+                "data": data,
+            }
+
+        poll_interval = 0.5 if state != previous_result else min(5.0, poll_interval * 1.5)
+        previous_result = state
+        time.sleep(min(poll_interval, max(0.0, deadline - time.monotonic())))
 
 
 @build.command("run")
@@ -23,8 +52,9 @@ def build():
 @click.option("--profile", help="Build Profile asset path (Unity 6+)")
 @click.option("--clean", is_flag=True, help="Clean build cache")
 @click.option("--auto-run", is_flag=True, help="Auto-run after build")
+@click.option("--wait", type=int, default=None, help="Wait up to N seconds for the build job.")
 @handle_unity_errors
-def run_build(target, output_path, development, scripting_backend, subtarget, profile, clean, auto_run):
+def run_build(target, output_path, development, scripting_backend, subtarget, profile, clean, auto_run, wait):
     """Trigger a player build.
 
     \b
@@ -61,13 +91,26 @@ def run_build(target, output_path, development, scripting_backend, subtarget, pr
     if result.get("success"):
         job_id = (result.get("data") or {}).get("job_id")
         if job_id:
+            if wait:
+                result = _wait_for_build(job_id, wait)
+                click.echo(format_output(result, config.format))
+                state = (result.get("data") or {}).get("result")
+                if state == "succeeded":
+                    print_success("Build completed successfully")
+                elif result.get("success"):
+                    print_error(f"Build ended with result: {state}")
+                    raise click.ClickException("Unity build failed")
+                else:
+                    raise click.ClickException(result.get("error") or "Unity build failed")
+                return
             print_info(f"Build started. Poll with: unity-mcp build status {job_id}")
 
 
 @build.command("status")
 @click.argument("job_id", required=False)
+@click.option("--wait", type=int, default=None, help="Wait up to N seconds for this build job.")
 @handle_unity_errors
-def status(job_id: Optional[str]):
+def status(job_id: Optional[str], wait: Optional[int]):
     """Check build status or get last build report.
 
     \b
@@ -79,8 +122,14 @@ def status(job_id: Optional[str]):
     params = {"action": "status"}
     if job_id:
         params["job_id"] = job_id
-    result = run_command("manage_build", params, config)
+    result = _wait_for_build(job_id, wait) if job_id and wait else run_command("manage_build", params, config)
     click.echo(format_output(result, config.format))
+    if not result.get("success"):
+        raise click.ClickException(result.get("error") or "Unity build status failed")
+    if job_id and wait:
+        state = (result.get("data") or {}).get("result")
+        if state not in ("succeeded", None):
+            raise click.ClickException(f"Unity build ended with result: {state}")
 
 
 @build.command("platform")

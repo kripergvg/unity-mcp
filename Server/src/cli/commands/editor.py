@@ -1,6 +1,7 @@
 """Editor CLI commands."""
 
 import sys
+import time
 import click
 from typing import Optional, Any
 
@@ -15,6 +16,49 @@ from cli.utils.parsers import parse_json_dict_or_exit
 def editor():
     """Editor operations - play mode, console, tags, layers."""
     pass
+
+
+def _wait_for_test_job(
+    job_id: str,
+    timeout: int,
+    details: bool,
+    failed_only: bool,
+):
+    config = get_config()
+    deadline = time.monotonic() + timeout
+    poll_interval = 0.25
+    previous_update = None
+
+    while True:
+        params: dict[str, Any] = {"job_id": job_id}
+        if details:
+            params["include_details"] = True
+        if failed_only:
+            params["include_failed_tests"] = True
+        result = run_command("get_test_job", params, config)
+        if not result.get("success"):
+            return result
+
+        data = result.get("data") or {}
+        if data.get("status") in ("succeeded", "failed", "cancelled"):
+            return result
+
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return {
+                "success": False,
+                "error": f"Unity tests did not finish within {timeout} seconds",
+                "data": data,
+            }
+
+        last_update = data.get("last_update_unix_ms")
+        poll_interval = (
+            0.25
+            if previous_update is not None and last_update != previous_update
+            else min(2.0, poll_interval * 1.5)
+        )
+        previous_update = last_update
+        time.sleep(min(poll_interval, remaining))
 
 
 @editor.command("play")
@@ -312,9 +356,14 @@ def execute_menu(menu_path: str):
 @click.option(
     "--wait", "-w",
     type=int,
-    default=None,
-    help="Wait up to N seconds for completion (default: no wait)."
+    default=600,
+    show_default=True,
+    help="Wait up to N seconds for completion unless --async is used."
 )
+@click.option("--test", "test_names", multiple=True, help="Fully qualified test name. Repeat for multiple tests.")
+@click.option("--group", "group_names", multiple=True, help="Regex test group. Repeat for multiple groups.")
+@click.option("--category", "category_names", multiple=True, help="NUnit category. Repeat for multiple categories.")
+@click.option("--assembly", "assembly_names", multiple=True, help="Test assembly. Repeat for multiple assemblies.")
 @click.option(
     "--details",
     is_flag=True,
@@ -326,21 +375,38 @@ def execute_menu(menu_path: str):
     help="Include details for failed/skipped tests only."
 )
 @handle_unity_errors
-def run_tests(mode: str, async_mode: bool, wait: Optional[int], details: bool, failed_only: bool):
+def run_tests(
+    mode: str,
+    async_mode: bool,
+    wait: int,
+    test_names: tuple[str, ...],
+    group_names: tuple[str, ...],
+    category_names: tuple[str, ...],
+    assembly_names: tuple[str, ...],
+    details: bool,
+    failed_only: bool,
+):
     """Run Unity tests.
 
     \b
     Examples:
         unity-mcp editor tests
         unity-mcp editor tests --mode PlayMode
+        unity-mcp editor tests --test Namespace.Fixture.Test
+        unity-mcp editor tests --group "Namespace.Fixture.*" --assembly My.Tests
         unity-mcp editor tests --async
-        unity-mcp editor tests --wait 60 --failed-only
     """
     config = get_config()
 
     params: dict[str, Any] = {"mode": mode}
-    if wait is not None:
-        params["wait_timeout"] = wait
+    if test_names:
+        params["test_names"] = list(test_names)
+    if group_names:
+        params["group_names"] = list(group_names)
+    if category_names:
+        params["category_names"] = list(category_names)
+    if assembly_names:
+        params["assembly_names"] = list(assembly_names)
     if details:
         params["include_details"] = True
     if failed_only:
@@ -356,7 +422,24 @@ def run_tests(mode: str, async_mode: bool, wait: Optional[int], details: bool, f
             print_info("Poll with: unity-mcp editor poll-test " + job_id)
             return
 
+    if not async_mode and result.get("success"):
+        data = result.get("data") or {}
+        job_id = data.get("job_id")
+        if job_id and data.get("status") == "running":
+            result = _wait_for_test_job(
+                job_id,
+                wait,
+                details,
+                failed_only,
+            )
+
     click.echo(format_output(result, config.format))
+    if isinstance(result, dict) and result.get("success"):
+        status = (result.get("data") or {}).get("status")
+        if status == "failed":
+            raise click.ClickException("Unity tests failed")
+    elif not result.get("success"):
+        raise click.ClickException(result.get("error") or "Unity tests failed")
 
 
 @editor.command("poll-test")
@@ -389,15 +472,7 @@ def poll_test(job_id: str, wait: int, details: bool, failed_only: bool):
     """
     config = get_config()
 
-    params: dict[str, Any] = {"job_id": job_id}
-    if wait:
-        params["wait_timeout"] = wait
-    if details:
-        params["include_details"] = True
-    if failed_only:
-        params["include_failed_tests"] = True
-
-    result = run_command("get_test_job", params, config)
+    result = _wait_for_test_job(job_id, wait, details, failed_only)
     click.echo(format_output(result, config.format))
 
     if isinstance(result, dict) and result.get("success"):
@@ -414,6 +489,8 @@ def poll_test(job_id: str, wait: int, details: bool, failed_only: bool):
             completed = progress.get("completed", 0)
             total = progress.get("total", 0)
             print_info(f"Tests running: {completed}/{total}")
+    else:
+        raise click.ClickException(result.get("error") or "Unity test polling failed")
 
 
 @editor.command("refresh")

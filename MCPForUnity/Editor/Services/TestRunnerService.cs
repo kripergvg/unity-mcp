@@ -386,6 +386,8 @@ namespace MCPForUnity.Editor.Services
 
                     bool isFailure = false;
                     string message = null;
+                    string stackTrace = null;
+                    string output = null;
                     try
                     {
                         // NUnit outcomes are strings in the adaptor; keep it simple.
@@ -396,13 +398,20 @@ namespace MCPForUnity.Editor.Services
                             isFailure = o.Contains("failed") || o.Contains("error");
                         }
                         message = result.Message;
+                        stackTrace = result.StackTrace;
+                        output = result.Output;
                     }
                     catch
                     {
                         // ignore adaptor quirks
                     }
 
-                    TestJobManager.OnLeafTestFinished(fullName, isFailure, message);
+                    TestJobManager.OnLeafTestFinished(
+                        fullName,
+                        isFailure,
+                        message,
+                        stackTrace,
+                        output);
                 }
                 catch
                 {

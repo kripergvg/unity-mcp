@@ -29,6 +29,9 @@ namespace MCPForUnity.Editor.Helpers
         [JsonProperty("serverSource")]
         public string ServerSource { get; private set; }
 
+        [JsonProperty("serverExecutable")]
+        public string ServerExecutable { get; private set; }
+
         public string HttpBaseUrl => $"http://127.0.0.1:{HttpPort}";
 
         public static string ConfigPath
@@ -109,6 +112,16 @@ namespace MCPForUnity.Editor.Helpers
                 throw new InvalidDataException(
                     $"Missing serverSource at '{path}'. " +
                     "Use the pinned Python server source that matches the Unity package.");
+
+            if (!string.IsNullOrWhiteSpace(config.ServerExecutable))
+            {
+                if (!Path.IsPathRooted(config.ServerExecutable))
+                    throw new InvalidDataException(
+                        $"serverExecutable must be an absolute path at '{path}'.");
+                if (!File.Exists(config.ServerExecutable))
+                    throw new InvalidDataException(
+                        $"serverExecutable does not exist at '{config.ServerExecutable}'.");
+            }
 
             return config;
         }
