@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Helpers;
@@ -18,9 +19,15 @@ namespace MCPForUnity.Editor.Services
     internal static class HttpAutoStartHandler
     {
         private const string SessionInitKey = "HttpAutoStartHandler.SessionInitialized";
+        private const double IsolatedWatchdogIntervalSeconds = 5.0;
+        private static double _nextWatchdogCheckTime;
+        private static int _autoStartOperationFlag;
 
         static HttpAutoStartHandler()
         {
+            EditorApplication.update -= OnEditorUpdate;
+            EditorApplication.update += OnEditorUpdate;
+
             // SessionState resets on editor process start but persists across domain reloads.
             // Only run once per session — let HttpBridgeReloadHandler handle reload-resume cases.
             if (SessionState.GetBool(SessionInitKey, false)) return;
@@ -47,6 +54,77 @@ namespace MCPForUnity.Editor.Services
             EditorApplication.delayCall += OnEditorReady;
         }
 
+        private static void OnEditorUpdate()
+        {
+            if (!ProjectIsolationConfiguration.IsEnabled)
+            {
+                return;
+            }
+
+            double now = EditorApplication.timeSinceStartup;
+            if (now < _nextWatchdogCheckTime)
+            {
+                return;
+            }
+            _nextWatchdogCheckTime = now + IsolatedWatchdogIntervalSeconds;
+
+            if (Application.isBatchMode
+                && string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("UNITY_MCP_ALLOW_BATCH")))
+            {
+                return;
+            }
+
+            try
+            {
+                if (!IsAutoStartEnabled() || !EditorConfigurationCache.Instance.UseHttpTransport)
+                {
+                    return;
+                }
+
+                var transport = MCPServiceLocator.TransportManager;
+                if (transport.IsRunning(TransportMode.Http))
+                {
+                    return;
+                }
+
+                if (transport.IsLifecycleBusy)
+                {
+                    return;
+                }
+
+                TryStartAutoStartOperation(probeServerOffMainThread: true, "[HTTP Watchdog]");
+            }
+            catch (Exception ex)
+            {
+                McpLog.Debug($"[HTTP Watchdog] Health check failed: {ex.Message}");
+            }
+        }
+
+        private static void TryStartAutoStartOperation(
+            bool probeServerOffMainThread,
+            string logPrefix)
+        {
+            if (Interlocked.CompareExchange(ref _autoStartOperationFlag, 1, 0) != 0)
+            {
+                return;
+            }
+
+            McpLog.Debug($"{logPrefix} Recovering disconnected bridge");
+            _ = RunAutoStartOperationAsync(probeServerOffMainThread);
+        }
+
+        private static async Task RunAutoStartOperationAsync(bool probeServerOffMainThread)
+        {
+            try
+            {
+                await AutoStartAsync(probeServerOffMainThread);
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _autoStartOperationFlag, 0);
+            }
+        }
+
         private static void OnEditorReady()
         {
             try
@@ -59,7 +137,9 @@ namespace MCPForUnity.Editor.Services
                 // Don't auto-start if bridge is already running.
                 if (MCPServiceLocator.TransportManager.IsRunning(TransportMode.Http)) return;
 
-                _ = AutoStartAsync();
+                TryStartAutoStartOperation(
+                    probeServerOffMainThread: false,
+                    "[HTTP Auto-Start]");
             }
             catch (Exception ex)
             {
@@ -67,7 +147,7 @@ namespace MCPForUnity.Editor.Services
             }
         }
 
-        private static async Task AutoStartAsync()
+        private static async Task AutoStartAsync(bool probeServerOffMainThread)
         {
             try
             {
@@ -84,10 +164,21 @@ namespace MCPForUnity.Editor.Services
                         return;
                     }
 
-                    // Check if server is already reachable (e.g. user started it externally).
-                    if (!MCPServiceLocator.Server.IsLocalHttpServerReachable())
+                    var server = MCPServiceLocator.Server;
+                    bool serverReachable = probeServerOffMainThread
+                        ? await Task.Run(server.IsLocalHttpServerReachable)
+                        : server.IsLocalHttpServerReachable();
+
+                    if (serverReachable
+                        && MCPServiceLocator.TransportManager.IsRecovering(TransportMode.Http))
                     {
-                        bool serverStarted = MCPServiceLocator.Server.StartLocalHttpServer(quiet: true);
+                        return;
+                    }
+
+                    // Check if server is already reachable (e.g. user started it externally).
+                    if (!serverReachable)
+                    {
+                        bool serverStarted = server.StartLocalHttpServer(quiet: true);
                         if (!serverStarted)
                         {
                             McpLog.Warn("[HTTP Auto-Start] Failed to start local HTTP server");

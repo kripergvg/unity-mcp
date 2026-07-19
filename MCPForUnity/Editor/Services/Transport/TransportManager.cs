@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Services.Transport.Transports;
@@ -16,6 +17,7 @@ namespace MCPForUnity.Editor.Services.Transport
         private TransportState _stdioState = TransportState.Disconnected("stdio");
         private Func<IMcpTransportClient> _webSocketFactory;
         private Func<IMcpTransportClient> _stdioFactory;
+        private readonly SemaphoreSlim _lifecycleGate = new(1, 1);
 
         public TransportManager()
         {
@@ -44,51 +46,67 @@ namespace MCPForUnity.Editor.Services.Transport
 
         public async Task<bool> StartAsync(TransportMode mode)
         {
-            IMcpTransportClient client = GetOrCreateClient(mode);
-
-            bool started = await client.StartAsync();
-            if (!started)
+            await _lifecycleGate.WaitAsync();
+            try
             {
-                try
-                {
-                    await client.StopAsync();
-                }
-                catch (Exception ex)
-                {
-                    McpLog.Warn($"Error while stopping transport {client.TransportName}: {ex.Message}");
-                }
-                UpdateState(mode, TransportState.Disconnected(client.TransportName, client.State?.Error ?? "Failed to start"));
-                return false;
-            }
+                IMcpTransportClient client = GetOrCreateClient(mode);
 
-            UpdateState(mode, client.State ?? TransportState.Connected(client.TransportName));
-            return true;
+                bool started = await client.StartAsync();
+                if (!started)
+                {
+                    try
+                    {
+                        await client.StopAsync();
+                    }
+                    catch (Exception ex)
+                    {
+                        McpLog.Warn($"Error while stopping transport {client.TransportName}: {ex.Message}");
+                    }
+                    UpdateState(mode, TransportState.Disconnected(client.TransportName, client.State?.Error ?? "Failed to start"));
+                    return false;
+                }
+
+                UpdateState(mode, client.State ?? TransportState.Connected(client.TransportName));
+                return true;
+            }
+            finally
+            {
+                _lifecycleGate.Release();
+            }
         }
 
         public async Task StopAsync(TransportMode? mode = null)
         {
-            async Task StopClient(IMcpTransportClient client, TransportMode clientMode)
+            await _lifecycleGate.WaitAsync();
+            try
             {
-                if (client == null) return;
-                try { await client.StopAsync(); }
-                catch (Exception ex) { McpLog.Warn($"Error while stopping transport {client.TransportName}: {ex.Message}"); }
-                finally { UpdateState(clientMode, TransportState.Disconnected(client.TransportName)); }
-            }
+                async Task StopClient(IMcpTransportClient client, TransportMode clientMode)
+                {
+                    if (client == null) return;
+                    try { await client.StopAsync(); }
+                    catch (Exception ex) { McpLog.Warn($"Error while stopping transport {client.TransportName}: {ex.Message}"); }
+                    finally { UpdateState(clientMode, TransportState.Disconnected(client.TransportName)); }
+                }
 
-            if (mode == null)
-            {
-                await StopClient(_httpClient, TransportMode.Http);
-                await StopClient(_stdioClient, TransportMode.Stdio);
-                return;
-            }
+                if (mode == null)
+                {
+                    await StopClient(_httpClient, TransportMode.Http);
+                    await StopClient(_stdioClient, TransportMode.Stdio);
+                    return;
+                }
 
-            if (mode == TransportMode.Http)
-            {
-                await StopClient(_httpClient, TransportMode.Http);
+                if (mode == TransportMode.Http)
+                {
+                    await StopClient(_httpClient, TransportMode.Http);
+                }
+                else
+                {
+                    await StopClient(_stdioClient, TransportMode.Stdio);
+                }
             }
-            else
+            finally
             {
-                await StopClient(_stdioClient, TransportMode.Stdio);
+                _lifecycleGate.Release();
             }
         }
 
@@ -108,6 +126,13 @@ namespace MCPForUnity.Editor.Services.Transport
 
         public TransportState GetState(TransportMode mode)
         {
+            IMcpTransportClient client = GetClient(mode);
+            if (client?.State != null)
+            {
+                UpdateState(mode, client.State);
+                return client.State;
+            }
+
             return mode switch
             {
                 TransportMode.Http => _httpState,
@@ -116,7 +141,21 @@ namespace MCPForUnity.Editor.Services.Transport
             };
         }
 
-        public bool IsRunning(TransportMode mode) => GetState(mode).IsConnected;
+        public bool IsRunning(TransportMode mode)
+        {
+            IMcpTransportClient client = GetClient(mode);
+            return client != null
+                && client.IsConnected
+                && GetState(mode).IsConnected;
+        }
+
+        public bool IsRecovering(TransportMode mode)
+        {
+            return GetClient(mode) is WebSocketTransportClient webSocket
+                && webSocket.IsRecovering;
+        }
+
+        public bool IsLifecycleBusy => _lifecycleGate.CurrentCount == 0;
 
         /// <summary>
         /// Synchronous teardown for shutdown/reload hooks where async awaits are not possible.

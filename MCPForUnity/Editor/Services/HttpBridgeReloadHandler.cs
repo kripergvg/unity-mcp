@@ -23,6 +23,7 @@ namespace MCPForUnity.Editor.Services
             TimeSpan.FromSeconds(10),
             TimeSpan.FromSeconds(30)
         };
+        private static readonly TimeSpan ResumeRetryTailInterval = TimeSpan.FromSeconds(30);
 
         static HttpBridgeReloadHandler()
         {
@@ -35,7 +36,12 @@ namespace MCPForUnity.Editor.Services
             try
             {
                 var transport = MCPServiceLocator.TransportManager;
-                bool shouldResume = transport.IsRunning(TransportMode.Http);
+                bool useHttp = EditorConfigurationCache.Instance.UseHttpTransport;
+                bool persistentConnectionRequested = IsPersistentConnectionRequested();
+                bool shouldResume = useHttp
+                    && (transport.IsRunning(TransportMode.Http)
+                        || transport.IsRecovering(TransportMode.Http)
+                        || persistentConnectionRequested);
 
                 if (shouldResume)
                 {
@@ -116,17 +122,54 @@ namespace MCPForUnity.Editor.Services
 
         private static async Task ResumeHttpWithRetriesAsync()
         {
-            Exception lastException = null;
+            int attempt = 0;
+            bool tailScheduleLogged = false;
 
-            for (int i = 0; i < ResumeRetrySchedule.Length; i++)
+            while (EditorConfigurationCache.Instance.UseHttpTransport)
             {
-                int attempt = i + 1;
-                McpLog.Debug($"[HTTP Reload] Resume attempt {attempt}/{ResumeRetrySchedule.Length}");
+                var transport = MCPServiceLocator.TransportManager;
+                if (transport.IsRunning(TransportMode.Http))
+                {
+                    MCPForUnityEditorWindow.RequestHealthVerification();
+                    return;
+                }
 
-                TimeSpan delay = ResumeRetrySchedule[i];
+                if (transport.IsLifecycleBusy || transport.IsRecovering(TransportMode.Http))
+                {
+                    try { await Task.Delay(TimeSpan.FromSeconds(1)); }
+                    catch { return; }
+                    continue;
+                }
+
+                int attemptNumber = attempt + 1;
+                McpLog.Debug($"[HTTP Reload] Resume attempt {attemptNumber}");
+
+                TimeSpan delay;
+                if (attempt < ResumeRetrySchedule.Length)
+                {
+                    delay = ResumeRetrySchedule[attempt];
+                }
+                else
+                {
+                    if (!IsPersistentConnectionRequested())
+                    {
+                        McpLog.Warn("Failed to resume HTTP MCP bridge after domain reload");
+                        return;
+                    }
+
+                    delay = ResumeRetryTailInterval;
+                    if (!tailScheduleLogged)
+                    {
+                        tailScheduleLogged = true;
+                        McpLog.Warn(
+                            $"[HTTP Reload] Initial resume schedule exhausted. " +
+                            $"Retrying every {ResumeRetryTailInterval.TotalSeconds}s.");
+                    }
+                }
+
                 if (delay > TimeSpan.Zero)
                 {
-                    McpLog.Debug($"[HTTP Reload] Waiting {delay.TotalSeconds:0.#}s before resume attempt {attempt}");
+                    McpLog.Debug($"[HTTP Reload] Waiting {delay.TotalSeconds:0.#}s before resume attempt {attemptNumber}");
                     try { await Task.Delay(delay); }
                     catch { return; }
                 }
@@ -139,38 +182,36 @@ namespace MCPForUnity.Editor.Services
 
                 try
                 {
-                    bool started = await MCPServiceLocator.TransportManager.StartAsync(TransportMode.Http);
+                    bool started = await transport.StartAsync(TransportMode.Http);
                     if (started)
                     {
-                        McpLog.Debug($"[HTTP Reload] Resume succeeded on attempt {attempt}");
+                        McpLog.Debug($"[HTTP Reload] Resume succeeded on attempt {attemptNumber}");
                         MCPForUnityEditorWindow.RequestHealthVerification();
                         return;
                     }
 
                     var state = MCPServiceLocator.TransportManager.GetState(TransportMode.Http);
                     string reason = string.IsNullOrWhiteSpace(state?.Error) ? "no error detail" : state.Error;
-                    McpLog.Debug($"[HTTP Reload] Resume attempt {attempt} failed: {reason}");
+                    McpLog.Debug($"[HTTP Reload] Resume attempt {attemptNumber} failed: {reason}");
                 }
                 catch (Exception ex)
                 {
-                    lastException = ex;
-                    McpLog.Debug($"[HTTP Reload] Resume attempt {attempt} threw: {ex.Message}");
+                    McpLog.Debug($"[HTTP Reload] Resume attempt {attemptNumber} threw: {ex.Message}");
                 }
-            }
 
-            if (lastException != null)
-            {
-                McpLog.Warn($"Failed to resume HTTP MCP bridge after domain reload: {lastException.Message}");
-            }
-            else
-            {
-                McpLog.Warn("Failed to resume HTTP MCP bridge after domain reload");
+                attempt++;
             }
         }
 
         private static string GetResumePrefKey()
         {
             return $"{EditorPrefKeys.ResumeHttpAfterReload}_{ProjectIdentityUtility.GetProjectHash()}";
+        }
+
+        private static bool IsPersistentConnectionRequested()
+        {
+            return ProjectIsolationConfiguration.IsEnabled
+                || EditorPrefs.GetBool(EditorPrefKeys.AutoStartOnLoad, false);
         }
     }
 }
