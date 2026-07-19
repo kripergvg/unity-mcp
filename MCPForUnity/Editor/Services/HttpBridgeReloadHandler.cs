@@ -78,7 +78,7 @@ namespace MCPForUnity.Editor.Services
                     ? EditorPrefs.GetBool(resumeKey, false)
                     : !ProjectIsolationConfiguration.IsEnabled
                         && EditorPrefs.GetBool(EditorPrefKeys.ResumeHttpAfterReload, false);
-                resume = useHttp && storedResume;
+                resume = useHttp && (storedResume || IsPersistentConnectionRequested());
                 if (resume)
                 {
                     EditorPrefs.DeleteKey(resumeKey);
