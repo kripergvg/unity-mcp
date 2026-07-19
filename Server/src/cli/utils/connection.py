@@ -18,6 +18,21 @@ class UnityConnectionError(Exception):
 F = TypeVar("F", bound=Callable[..., Any])
 
 
+def normalize_command_response(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Unwrap the transport command envelope returned by the plugin hub."""
+    if payload.get("status") == "success" and isinstance(payload.get("result"), dict):
+        return payload["result"]
+    if payload.get("status") == "error":
+        result = payload.get("result")
+        if isinstance(result, dict):
+            return result
+        return {
+            "success": False,
+            "error": payload.get("error") or payload.get("message") or str(result),
+        }
+    return payload
+
+
 def handle_unity_errors(func: F) -> F:
     """Decorator that handles UnityConnectionError consistently.
 
@@ -106,7 +121,7 @@ async def send_command(
                 timeout=timeout or cfg.timeout,
             )
             response.raise_for_status()
-            return response.json()
+            return normalize_command_response(response.json())
     except httpx.ConnectError as e:
         raise UnityConnectionError(
             f"Cannot connect to Unity MCP server at {cfg.host}:{cfg.port}. "

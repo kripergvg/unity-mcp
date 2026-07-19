@@ -13,6 +13,7 @@ from cli.utils.connection import (
     check_connection,
     list_unity_instances,
     UnityConnectionError,
+    normalize_command_response,
 )
 
 
@@ -182,6 +183,17 @@ class TestOutputFormatting:
 
         table_result = format_output(data, "table")
         assert "key" in table_result.lower() or "Key" in table_result
+
+    def test_normalize_command_response_unwraps_plugin_envelope(self):
+        payload = {
+            "status": "success",
+            "result": {
+                "success": True,
+                "data": {"job_id": "job-1", "status": "running"},
+            },
+        }
+
+        assert normalize_command_response(payload) == payload["result"]
 
 
 # =============================================================================
