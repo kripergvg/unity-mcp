@@ -97,27 +97,9 @@ namespace MCPForUnity.Editor.Services
                 return;
             }
 
-            // If the editor is not compiling, attempt an immediate restart without relying on editor focus.
-            bool isCompiling = EditorApplication.isCompiling;
-            try
-            {
-                var pipeline = Type.GetType("UnityEditor.Compilation.CompilationPipeline, UnityEditor");
-                var prop = pipeline?.GetProperty("isCompiling", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
-                if (prop != null) isCompiling |= (bool)prop.GetValue(null);
-            }
-            catch { }
-
-            if (!isCompiling)
-            {
-                _ = ResumeHttpWithRetriesAsync();
-                return;
-            }
-
-            // Fallback when compiling: schedule on the editor loop
-            EditorApplication.delayCall += () =>
-            {
-                _ = ResumeHttpWithRetriesAsync();
-            };
+            // afterAssemblyReload already runs on the editor thread. Start immediately because
+            // delayCall can remain dormant after a background domain reload until the window is focused.
+            _ = ResumeHttpWithRetriesAsync();
         }
 
         private static async Task ResumeHttpWithRetriesAsync()
