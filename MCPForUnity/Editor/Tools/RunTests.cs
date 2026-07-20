@@ -79,9 +79,14 @@ namespace MCPForUnity.Editor.Tools
             var testNames = p.GetStringArray("testNames");
             var groupNames = p.GetStringArray("groupNames");
             var categoryNames = p.GetStringArray("categoryNames");
+            var excludeCategoryNames = p.GetStringArray("excludeCategoryNames");
             var assemblyNames = p.GetStringArray("assemblyNames");
 
-            if (testNames == null && groupNames == null && categoryNames == null && assemblyNames == null)
+            if (testNames == null &&
+                groupNames == null &&
+                categoryNames == null &&
+                excludeCategoryNames == null &&
+                assemblyNames == null)
             {
                 return null;
             }
@@ -91,6 +96,7 @@ namespace MCPForUnity.Editor.Tools
                 TestNames = testNames,
                 GroupNames = groupNames,
                 CategoryNames = categoryNames,
+                ExcludeCategoryNames = excludeCategoryNames,
                 AssemblyNames = assemblyNames
             };
         }

@@ -363,6 +363,7 @@ def execute_menu(menu_path: str):
 @click.option("--test", "test_names", multiple=True, help="Fully qualified test name. Repeat for multiple tests.")
 @click.option("--group", "group_names", multiple=True, help="Regex test group. Repeat for multiple groups.")
 @click.option("--category", "category_names", multiple=True, help="NUnit category. Repeat for multiple categories.")
+@click.option("--exclude-category", "exclude_category_names", multiple=True, help="NUnit category to exclude.")
 @click.option("--assembly", "assembly_names", multiple=True, help="Test assembly. Repeat for multiple assemblies.")
 @click.option(
     "--details",
@@ -382,6 +383,7 @@ def run_tests(
     test_names: tuple[str, ...],
     group_names: tuple[str, ...],
     category_names: tuple[str, ...],
+    exclude_category_names: tuple[str, ...],
     assembly_names: tuple[str, ...],
     details: bool,
     failed_only: bool,
@@ -405,6 +407,8 @@ def run_tests(
         params["group_names"] = list(group_names)
     if category_names:
         params["category_names"] = list(category_names)
+    if exclude_category_names:
+        params["exclude_category_names"] = list(exclude_category_names)
     if assembly_names:
         params["assembly_names"] = list(assembly_names)
     if details:

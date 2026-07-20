@@ -64,6 +64,27 @@ namespace MCPForUnityTests.Editor.Tools
         }
 
         [Test]
+        public void FilterOptions_ParseExcludedCategories()
+        {
+            var method = typeof(MCPForUnity.Editor.Tools.RunTests).GetMethod(
+                "GetFilterOptions",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            var options = method.Invoke(null, new object[]
+            {
+                new JObject
+                {
+                    ["assemblyNames"] = new JArray("FastCombat.Tests"),
+                    ["excludeCategoryNames"] = new JArray("Performance")
+                }
+            });
+            var type = options.GetType();
+
+            CollectionAssert.AreEqual(
+                new[] { "Performance" },
+                (string[])type.GetProperty("ExcludeCategoryNames").GetValue(options));
+        }
+
+        [Test]
         public void FailedJobSerializationIncludesFullResultAndDiagnostics()
         {
             var asm = typeof(MCPForUnity.Editor.Services.MCPServiceLocator).Assembly;

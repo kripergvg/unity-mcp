@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using MCPForUnity.Editor.Helpers;
@@ -231,6 +232,14 @@ namespace MCPForUnity.Editor.Services
                     categoryNames = filterOptions?.CategoryNames,
                     assemblyNames = filterOptions?.AssemblyNames
                 };
+                if (filterOptions?.ExcludeCategoryNames is { Length: > 0 })
+                {
+                    var root = await RetrieveTestRootAsync(mode).ConfigureAwait(true);
+                    filter.testNames = CollectFilteredLeafNames(root, filterOptions);
+                    filter.groupNames = null;
+                    filter.categoryNames = null;
+                    filter.assemblyNames = null;
+                }
                 var settings = new ExecutionSettings(filter);
 
                 // Save dirty scenes for all test modes to prevent modal dialogs blocking MCP
@@ -449,6 +458,95 @@ namespace MCPForUnity.Editor.Services
             }
 
             return total;
+        }
+
+        private static string[] CollectFilteredLeafNames(
+            ITestAdaptor root,
+            TestFilterOptions options)
+        {
+            if (root == null)
+            {
+                return Array.Empty<string>();
+            }
+
+            var names = new List<string>();
+            var excluded = new HashSet<string>(
+                options.ExcludeCategoryNames ?? Array.Empty<string>(),
+                StringComparer.OrdinalIgnoreCase);
+            var groupPatterns = (options.GroupNames ?? Array.Empty<string>())
+                .Select(pattern => new Regex(pattern))
+                .ToArray();
+            Collect(root);
+            return names.ToArray();
+
+            void Collect(ITestAdaptor node)
+            {
+                if (node == null)
+                {
+                    return;
+                }
+                if (node.HasChildren && node.Children != null)
+                {
+                    foreach (var child in node.Children)
+                    {
+                        Collect(child);
+                    }
+                    return;
+                }
+
+                var fullName = node.FullName ?? node.Name;
+                if (string.IsNullOrWhiteSpace(fullName))
+                {
+                    return;
+                }
+                if ((node.Categories ?? Array.Empty<string>()).Any(excluded.Contains))
+                {
+                    return;
+                }
+                if (options.TestNames is { Length: > 0 } &&
+                    !options.TestNames.Contains(fullName, StringComparer.Ordinal))
+                {
+                    return;
+                }
+                if (groupPatterns.Length > 0 &&
+                    !groupPatterns.Any(pattern => pattern.IsMatch(fullName)))
+                {
+                    return;
+                }
+                if (options.CategoryNames is { Length: > 0 } &&
+                    !(node.Categories ?? Array.Empty<string>())
+                        .Any(category => options.CategoryNames.Contains(
+                            category,
+                            StringComparer.OrdinalIgnoreCase)))
+                {
+                    return;
+                }
+                if (options.AssemblyNames is { Length: > 0 } &&
+                    !options.AssemblyNames.Contains(
+                        GetAssemblyName(node),
+                        StringComparer.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+                names.Add(fullName);
+            }
+        }
+
+        private static string GetAssemblyName(ITestAdaptor node)
+        {
+            var current = node;
+            while (current != null)
+            {
+                if (current.IsTestAssembly)
+                {
+                    break;
+                }
+                current = current.Parent;
+            }
+            var name = current?.Name ?? string.Empty;
+            return name.EndsWith(".dll", StringComparison.OrdinalIgnoreCase)
+                ? name.Substring(0, name.Length - 4)
+                : name;
         }
 
         private static bool EnsurePlayModeRunsWithoutDomainReload(

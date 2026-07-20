@@ -169,6 +169,8 @@ async def run_tests(
                            "Same as test_names, except it allows for Regex"] | None = None,
     category_names: Annotated[list[str] | str,
                               "NUnit category names to filter by"] | None = None,
+    exclude_category_names: Annotated[list[str] | str,
+                                     "NUnit category names to exclude"] | None = None,
     assembly_names: Annotated[list[str] | str,
                               "Assembly names to filter tests by"] | None = None,
     include_failed_tests: Annotated[bool,
@@ -209,6 +211,8 @@ async def run_tests(
         params["groupNames"] = g
     if (c := _coerce_string_list(category_names)):
         params["categoryNames"] = c
+    if (excluded := _coerce_string_list(exclude_category_names)):
+        params["excludeCategoryNames"] = excluded
     if (a := _coerce_string_list(assembly_names)):
         params["assemblyNames"] = a
     if include_failed_tests:

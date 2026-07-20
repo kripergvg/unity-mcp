@@ -26,6 +26,11 @@ namespace MCPForUnity.Editor.Services
         public string[] CategoryNames { get; set; }
 
         /// <summary>
+        /// NUnit category names to exclude from the run.
+        /// </summary>
+        public string[] ExcludeCategoryNames { get; set; }
+
+        /// <summary>
         /// Assembly names to filter tests by.
         /// </summary>
         public string[] AssemblyNames { get; set; }
