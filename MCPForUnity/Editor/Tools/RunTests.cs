@@ -46,7 +46,12 @@ namespace MCPForUnity.Editor.Tools
 
                 var filterOptions = GetFilterOptions(@params);
                 long initTimeoutMs = p.GetInt("initTimeout") ?? 0;
-                string jobId = TestJobManager.StartJob(parsedMode.Value, filterOptions, initTimeoutMs);
+                string requestedJobId = p.Get("jobId");
+                string jobId = TestJobManager.StartJob(
+                    parsedMode.Value,
+                    filterOptions,
+                    initTimeoutMs,
+                    requestedJobId);
 
                 return Task.FromResult<object>(new SuccessResponse("Test job started.", new
                 {

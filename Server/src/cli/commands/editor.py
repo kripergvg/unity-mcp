@@ -2,6 +2,7 @@
 
 import sys
 import time
+import uuid
 import click
 from typing import Optional, Any
 
@@ -401,6 +402,7 @@ def run_tests(
     config = get_config()
 
     params: dict[str, Any] = {"mode": mode}
+    params["jobId"] = uuid.uuid4().hex
     if test_names:
         params["test_names"] = list(test_names)
     if group_names:

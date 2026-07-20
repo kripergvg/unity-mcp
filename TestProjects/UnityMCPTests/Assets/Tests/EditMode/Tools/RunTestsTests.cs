@@ -4,6 +4,7 @@ using System.Reflection;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using MCPForUnity.Editor.Helpers;
+using UnityEditor.TestTools.TestRunner.Api;
 
 namespace MCPForUnityTests.Editor.Tools
 {
@@ -82,6 +83,46 @@ namespace MCPForUnityTests.Editor.Tools
             CollectionAssert.AreEqual(
                 new[] { "Performance" },
                 (string[])type.GetProperty("ExcludeCategoryNames").GetValue(options));
+        }
+
+        [Test]
+        public void StartJob_WithSameRequestedId_IsIdempotent()
+        {
+            var asm = typeof(MCPForUnity.Editor.Services.MCPServiceLocator).Assembly;
+            var manager = asm.GetType("MCPForUnity.Editor.Services.TestJobManager");
+            var currentJob = manager.GetField(
+                "_currentJobId",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            var jobs = manager.GetField(
+                "Jobs",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            var originalCurrent = currentJob.GetValue(null);
+            var dictionary = (IDictionary)jobs.GetValue(null);
+            try
+            {
+                dictionary.Clear();
+                var jobType = asm.GetType("MCPForUnity.Editor.Services.TestJob");
+                var job = Activator.CreateInstance(jobType);
+                var id = "idempotent-job";
+                jobType.GetProperty("JobId").SetValue(job, id);
+                dictionary.Add(id, job);
+                currentJob.SetValue(null, id);
+                var start = manager.GetMethod("StartJob");
+                var first = start.Invoke(null, new object[]
+                {
+                    TestMode.EditMode,
+                    null,
+                    0L,
+                    id
+                });
+
+                Assert.AreEqual(id, first);
+            }
+            finally
+            {
+                currentJob.SetValue(null, originalCurrent);
+                dictionary.Clear();
+            }
         }
 
         [Test]

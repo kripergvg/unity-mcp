@@ -182,6 +182,8 @@ async def run_tests(
                             "due to domain reload (default: 15000). Recommended: 120000 for PlayMode."] = None,
     wait_timeout: Annotated[int | None,
                             "If set, wait up to this many seconds for completion before returning."] = None,
+    job_id: Annotated[str | None,
+                      "Optional idempotency key for safely retrying test start"] = None,
 ) -> RunTestsStartResponse | GetTestJobResponse | MCPResponse:
     if init_timeout is not None and init_timeout <= 0:
         return MCPResponse(success=False, error="init_timeout must be a positive integer (milliseconds) or None")
@@ -205,6 +207,8 @@ async def run_tests(
         return None
 
     params: dict[str, Any] = {"mode": mode}
+    if job_id:
+        params["jobId"] = job_id
     if (t := _coerce_string_list(test_names)):
         params["testNames"] = t
     if (g := _coerce_string_list(group_names)):

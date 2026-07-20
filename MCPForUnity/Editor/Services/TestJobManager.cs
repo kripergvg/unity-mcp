@@ -301,13 +301,21 @@ namespace MCPForUnity.Editor.Services
             }
         }
 
-        public static string StartJob(TestMode mode, TestFilterOptions filterOptions = null, long initTimeoutMs = 0)
+        public static string StartJob(
+            TestMode mode,
+            TestFilterOptions filterOptions = null,
+            long initTimeoutMs = 0,
+            string requestedJobId = null)
         {
             // Clamp to valid range: non-positive values mean "use default", cap at 10 minutes
             if (initTimeoutMs < 0) initTimeoutMs = 0;
             if (initTimeoutMs > MaxInitializationTimeoutMs) initTimeoutMs = MaxInitializationTimeoutMs;
 
-            string jobId = Guid.NewGuid().ToString("N");
+            string jobId = string.IsNullOrWhiteSpace(requestedJobId)
+                ? Guid.NewGuid().ToString("N")
+                : requestedJobId.Trim();
+            if (jobId.Length > 128)
+                throw new ArgumentException("Requested test job id cannot exceed 128 characters.");
             long started = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             string modeStr = mode.ToString();
 
@@ -334,6 +342,10 @@ namespace MCPForUnity.Editor.Services
             // Single lock scope for check-and-set to avoid TOCTOU race
             lock (LockObj)
             {
+                if (Jobs.ContainsKey(jobId))
+                {
+                    return jobId;
+                }
                 if (!string.IsNullOrEmpty(_currentJobId))
                 {
                     throw new InvalidOperationException("A Unity test run is already in progress.");
