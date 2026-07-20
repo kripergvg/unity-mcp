@@ -27,6 +27,11 @@ namespace MCPForUnity.Editor.Services
 
         static HttpBridgeReloadHandler()
         {
+            if (StartupConfigRewrite.IsRunningInAssetImportWorker())
+            {
+                return;
+            }
+
             AssemblyReloadEvents.beforeAssemblyReload += OnBeforeAssemblyReload;
             AssemblyReloadEvents.afterAssemblyReload += OnAfterAssemblyReload;
         }

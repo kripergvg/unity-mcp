@@ -62,7 +62,7 @@ namespace MCPForUnity.Editor.Services
 
         private static bool? _cachedIsAssetImportWorker;
 
-        private static bool IsRunningInAssetImportWorker()
+        internal static bool IsRunningInAssetImportWorker()
         {
             if (_cachedIsAssetImportWorker.HasValue)
                 return _cachedIsAssetImportWorker.Value;

@@ -17,6 +17,11 @@ namespace MCPForUnity.Editor.Services
     {
         static McpEditorShutdownCleanup()
         {
+            if (StartupConfigRewrite.IsRunningInAssetImportWorker())
+            {
+                return;
+            }
+
             // Guard against duplicate subscriptions across domain reloads.
             try { EditorApplication.quitting -= OnEditorQuitting; } catch { }
             EditorApplication.quitting += OnEditorQuitting;
@@ -56,4 +61,3 @@ namespace MCPForUnity.Editor.Services
         }
     }
 }
-

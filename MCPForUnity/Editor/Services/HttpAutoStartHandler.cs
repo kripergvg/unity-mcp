@@ -25,6 +25,11 @@ namespace MCPForUnity.Editor.Services
 
         static HttpAutoStartHandler()
         {
+            if (StartupConfigRewrite.IsRunningInAssetImportWorker())
+            {
+                return;
+            }
+
             EditorApplication.update -= OnEditorUpdate;
             EditorApplication.update += OnEditorUpdate;
 
